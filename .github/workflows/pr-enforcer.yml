@@ -2,7 +2,7 @@ name: PR Enforcer
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 jobs:
   run-enforcer:
