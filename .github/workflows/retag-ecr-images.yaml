@@ -1,0 +1,69 @@
+on:
+  push:
+    branches:
+      - master
+  schedule:    
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+name: Retag ECR Images
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  retag_ecr_images:
+    runs-on: enigma-scale-set
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 2
+    - name: Cache tools
+      id: cache-tools
+      uses: actions/cache@v3
+      with:
+        key: retag-ecr-images-tools
+        path: ~/.cache
+
+    - if: ${{ steps.cache-tools.outputs.cache-hit != 'true' }}
+      name: Install Packages without cache
+      run: |
+            sudo apt update -y
+            sudo apt install jq curl unzip -y
+
+            sudo curl -sL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod a+x /usr/local/bin/yq
+
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -q awscliv2.zip
+            sudo ./aws/install
+
+            mkdir -p ~/.cache/bin/
+            cp /usr/local/bin/yq ~/.cache/bin/
+            cp -r aws ~/.cache/
+
+    - if: ${{ steps.cache-tools.outputs.cache-hit == 'true' }}
+      name: Install Packages from cache
+      run: |
+        sudo cp ~/.cache/bin/* /usr/local/bin/
+        sudo ~/.cache/aws/install
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::391601313729:role/retag-ecr-images-role
+        aws-region: eu-west-2
+        role-duration-seconds: 1800
+    - name: retag-ecr-images
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+      run: |
+        . .github/workflows/retag-ecr-images.sh
+        
+        if [ "${{ github.event_name }}" == "push" ]; then
+          retag_images_from_commit HEAD~1
+        else
+          retag_images_from_directory projects
+          retag_images_from_directory infrastructure
+        fi

@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../base
+
+images:
+- name: lens
+  newName: 89051.dkr.ecr.eu-west-1.amazonaws.com/lenexample
+  newTag: "828e6ac"
+
+generatorOptions:
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+
+configMapGenerator:
+- envs:
+  - config.env
+  name: lensnexample
+
+patches:
+- path: patches/deployment.yaml
+- path: patches/external-secret.yaml
+- path: patches/hpa.yaml
+- path: patches/ingress.yaml
+- path: patches/service-account.yaml

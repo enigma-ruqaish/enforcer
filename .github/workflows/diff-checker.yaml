@@ -1,0 +1,90 @@
+name: 'Diff Checker'
+
+on:
+  pull_request:
+    types: ["opened", "synchronize", "reopened"]
+    paths-ignore:
+      - 'docs/*'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  checker:
+    runs-on: enigma-scale-set
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Cache tools
+      id: cache-tools
+      uses: actions/cache@v3
+      with:
+        key: diff-checker-tools
+        path: ~/.cache
+
+    - if: ${{ steps.cache-tools.outputs.cache-hit != 'true' }}
+      name: Install Packages without cache
+      run: |
+        sudo apt update -y
+        sudo apt install jq curl -y
+
+        curl -s -o /tmp/install_kustomize.sh "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
+        chmod +x /tmp/install_kustomize.sh
+        sudo /tmp/install_kustomize.sh /usr/local/bin
+
+        curl -LO https://get.helm.sh/helm-v3.11.2-linux-amd64.tar.gz
+        tar -zxvf helm-v3.11.2-linux-amd64.tar.gz
+        sudo mv linux-amd64/helm /usr/local/bin/helm
+
+        curl -s -o /tmp/download-latest-dyff.sh "https://raw.githubusercontent.com/homeport/dyff/refs/heads/main/scripts/download-latest.sh"  && \
+        chmod +x /tmp/download-latest-dyff.sh && \
+        sudo /tmp/download-latest-dyff.sh
+
+        mkdir -p ~/.cache/bin/
+        cp /usr/local/bin/{kustomize,helm,dyff} ~/.cache/bin/
+
+    - if: ${{ steps.cache-tools.outputs.cache-hit == 'true' }}
+      name: Install Packages from cache
+      run: sudo cp ~/.cache/bin/* /usr/local/bin/
+
+    - name: Compile Kubernetes Manifest Difference
+      id: diff
+      run: |
+        ./.github/workflows/diff-checker.sh
+
+    - uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+
+          // 1. Retrieve existing bot comments for the PR
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          })
+          const botComment = comments.find(comment => {
+            return comment.user.type === 'Bot' && comment.body.includes('Kubernetes Manifest Difference')
+          })
+
+          // 2. Prepare format of the comment
+          const output = fs.readFileSync(`${process.env.HOME}/diff.txt`, 'utf8')
+
+          // 3. If we have a comment, update it, otherwise create a new one
+          if (botComment) {
+            github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: output
+            })
+          } else {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+          }
