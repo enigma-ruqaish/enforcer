@@ -29,8 +29,7 @@ fetch_branches() {
     git fetch origin "$(github .base_ref)" "$(github .head_ref)"
 }
 
-#ALLOWED_FILES_REGEX="^(projects/.*/(deployment|hpa|ingress|kustomization)\.ya?ml)$"
-ALLOWED_FILES_REGEX=".*"
+ALLOWED_FILES_REGEX="^(projects/.*/(deployment|hpa|ingress|kustomization)\.ya?ml)$"
 DIFF_BRANCHES="origin/$(github .base_ref)..origin/$(github .head_ref)"
 ENIGMA_TEAM="SectorLabs/enigma-devops"
 
