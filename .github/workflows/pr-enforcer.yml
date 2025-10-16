@@ -1,0 +1,26 @@
+name: PR Enforcer
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  run-enforcer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl git
+
+      - name: Run PR Enforcer script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORG_TOKEN: ${{ secrets.ORG_TOKEN }}
+        run: |
+          chmod +x .github/workflows/pr-enforcer.sh
+          .github/workflows/pr-enforcer.sh
