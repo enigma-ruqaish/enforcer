@@ -1,5 +1,2 @@
-* @SectorLabs/enigma-devops
-
-projects/kevlar/** @SectorLabs/enigma-devops @SectorLabs/kevlar
-projects/kevlar/**/live/** @SectorLabs/enigma-devops @SectorLabs/kevlar-core
-
+projects/vortex/** @enigma-ruqaish/vortex-dev
+projects/vortex/** @enigma-ruqaish/vortex-admin
