@@ -12,7 +12,7 @@ USER_TEAMS=$(curl -s -H "Authorization: Bearer $ORG_TOKEN" \
   "https://api.github.com/orgs/${ORG}/memberships/${GITHUB_ACTOR}" | jq -r '.state // empty')
 
 if [[ "$USER_TEAMS" != "active" ]]; then
-  echo "❌ User '$GITHUB_ACTOR' is not an active member of the organization '$ORG'."
+  echo "User '$GITHUB_ACTOR' is not an active member of the organization '$ORG'."
   exit 1
 fi
 
@@ -23,7 +23,7 @@ for TEAM in "${ALLOWED_TEAMS[@]}"; do
     "https://api.github.com/orgs/${ORG}/teams/${TEAM}/memberships/${GITHUB_ACTOR}")
 
   if [[ "$IS_MEMBER" == "200" ]]; then
-    echo "✅ User '$GITHUB_ACTOR' is a member of allowed team '${TEAM}'."
+    echo "User '$GITHUB_ACTOR' is a member of allowed team '${TEAM}'."
     exit 0
   fi
 done
