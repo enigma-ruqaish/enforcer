@@ -28,5 +28,5 @@ for TEAM in "${ALLOWED_TEAMS[@]}"; do
   fi
 done
 
-echo "🚫 Access denied: '$GITHUB_ACTOR' is not part of vortex-admin or vortex-dev teams."
+echo "Access denied: '$GITHUB_ACTOR' is not part of vortex-admin or vortex-dev teams."
 exit 1
