@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: symbius
+  annotations:
+    alb.ingress.kubernetes.io/group.name: example-2-stage
+    alb.ingress.kubernetes.io/group.order: "225"
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-west-1:5946289051:certificate/f265
+spec:
+  tls:
+  - hosts:
+    - example-2.dubizzlelabs.run
+    - example-2.dubizzlelabs.run
+  rules:
+  - host: example-2.dubizzlelabs.run
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: symbius
+            port:
+              number: 80
+     
