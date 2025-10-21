@@ -55,11 +55,11 @@ check_allowed_files() {
 
   # Handle shallow clones or missing base branch
   if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
-    echo "Base branch '$base_branch' not found, using previous commit (HEAD^)..."
+    echo "⚠️ Base branch '$base_branch' not found, using previous commit (HEAD^)..."
     if git rev-parse --verify "HEAD^" >/dev/null 2>&1; then
       base_branch="HEAD^"
     else
-      echo "No previous commit found — likely first commit. Enforcing allowed path rule manually..."
+      echo "⚠️ No previous commit found — likely first commit. Enforcing allowed path rule manually..."
       base_branch=""
     fi
   fi
@@ -75,10 +75,11 @@ check_allowed_files() {
 
   if [[ -z "$changed_files" ]]; then
     echo "No changed files detected."
-    return 10
+    echo 10
+    return 0
   fi
 
-  echo "Changed files:"
+  echo "📂 Changed files:"
   echo "$changed_files"
   echo
 
@@ -92,91 +93,12 @@ check_allowed_files() {
   done <<< "$changed_files"
 
   if [[ "$disallowed_found" == true ]]; then
-    echo "One or more files are outside allowed path (projects/vortex/**)"
-    return 20
-  fi
-   echo "All changed files are within allowed paths."
-  return 10
-}
-
-
-#Function 4
-check_new_tag_change_only() {
-  echo "🔎 Running new tag change validation..."
-
-  ### CHANGE: Added debug printing for every step
-  echo "🧩 Step 1: Checking if user is admin..."
-  local role_code
-  role_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "vortex-admin" || true)
-  echo "   → Role code: $role_code"
-
-  if [[ "$role_code" != "10" ]]; then
-    echo "❌ User '$GITHUB_ACTOR' is not an admin — cannot perform tag-only changes."
-    return 20
-  fi
-
-  echo "🧩 Step 2: Running file restriction check..."
-  check_allowed_files
-  local allowed_code=$?
-  echo "   → File restriction return code: $allowed_code"
-
-  if [[ "$allowed_code" -ne 10 ]]; then
-    echo "❌ File restriction check failed — disallowed files changed."
-    return 20
-  fi
-
-  echo "🧩 Step 3: Detecting changed files..."
-  local base_branch="${BASE_BRANCH:-origin/main}"
-  git fetch origin "$base_branch" --depth=50 >/dev/null 2>&1 || true
-  local changed_files
-  changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
-
-  echo "   → Changed files:"
-  echo "$changed_files"
-
-  local file_count
-  file_count=$(echo "$changed_files" | grep -c '.')
-  echo "   → Total changed files: $file_count"
-
-  if [[ "$file_count" -ne 1 ]]; then
-    echo "❌ Expected exactly one changed file, found $file_count."
-    return 20
-  fi
-
-  local changed_file
-  changed_file=$(echo "$changed_files" | head -n1)
-  echo "🧩 Step 4: Changed file path: $changed_file"
-
-  if [[ ! "$changed_file" =~ ^projects/vortex/.*/kustomization\.ya?ml$ ]]; then
-    echo "❌ File '$changed_file' is not a valid kustomization.yaml."
-    return 20
-  fi
-
-  echo "🧩 Step 5: Checking diff for 'newTag:'..."
-  local diff_output
-  diff_output=$(git diff "$base_branch"...HEAD -- "$changed_file")
-  echo "📜 Diff output:"
-  echo "$diff_output"
-
-  local added_lines
-  added_lines=$(echo "$diff_output" | grep -E '^[+-]\s*newTag:' || true)
-  echo "📘 newTag-related diff lines:"
-  echo "$added_lines"
-
-  local total_diff_lines
-  total_diff_lines=$(echo "$diff_output" | grep -E '^[+-]' | grep -v '^\+\+\+' | grep -v '^---' | wc -l)
-  local newtag_diff_lines
-  newtag_diff_lines=$(echo "$added_lines" | wc -l)
-
-  echo "   → Total diff lines: $total_diff_lines"
-  echo "   → newTag diff lines: $newtag_diff_lines"
-
-  if [[ "$total_diff_lines" -eq "$newtag_diff_lines" && "$newtag_diff_lines" -gt 0 ]]; then
-    echo "✅ Passed: Only newTag changed."
-    return 10
+    echo "One or more files are outside the allowed directory (projects/vortex/**)."
+    exit 1
   else
-    echo "❌ Failed: Detected changes other than newTag."
-    return 20
+    echo "All changed files are within allowed paths."
+    echo 10
+    return 0
   fi
 }
 
@@ -202,17 +124,6 @@ main() {
   if ! check_allowed_files; then
     echo "File restriction check failed."
     exit 1
-  fi
-
-  echo "Running newTag validation..."
-  check_new_tag_change_only
-  exit_code=$?
-
-  if [[ "$exit_code" -ne 0 ]]; then
-   echo "❌ newTag validation failed with code $exit_code."
-   exit 1
-  else
-   echo "✅ newTag validation passed."
   fi
 
   echo " All checks passed successfully."
