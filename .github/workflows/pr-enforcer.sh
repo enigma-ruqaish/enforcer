@@ -87,16 +87,16 @@ check_allowed_files() {
   while IFS= read -r file; do
     # Only allow files under projects/vortex/**
     if [[ ! "$file" =~ ^projects/vortex/ ]]; then
-      echo "❌ Disallowed file detected: $file"
+      echo "Disallowed file detected: $file"
       disallowed_found=true
     fi
   done <<< "$changed_files"
 
   if [[ "$disallowed_found" == true ]]; then
-    echo "🚫 One or more files are outside the allowed directory (projects/vortex/**)."
+    echo "One or more files are outside the allowed directory (projects/vortex/**)."
     exit 1
   else
-    echo "✅ All changed files are within allowed paths."
+    echo "All changed files are within allowed paths."
     echo 10
     return 0
   fi
