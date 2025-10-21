@@ -18,7 +18,6 @@ configMapGenerator:
 - envs:
   - config.env
   name: lensnexample
-
 patches:
 - path: patches/deployment.yaml
 - path: patches/external-secret.yaml
