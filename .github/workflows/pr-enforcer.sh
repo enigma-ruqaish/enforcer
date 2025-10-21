@@ -39,14 +39,17 @@ check_team_membership() {
 
   if [[ "$status" == "200" ]]; then
     echo "✅ User '$user' is a member of team '$team'."
+
     if [[ "$team" == "vortex-admin" ]]; then
-      return 1
+      echo 1  # status code for admin
+      return 0
     elif [[ "$team" == "vortex-dev" ]]; then
+      echo 0  # status code for dev
       return 0
     fi
   fi
 
-  return 2
+  return 1
 }
 
 # ----------------------------
@@ -56,15 +59,15 @@ main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
 
   for TEAM in "${ALLOWED_TEAMS[@]}"; do
-    check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM"
-    local code=$?
-
-    if [[ "$code" -eq 1 ]]; then
-      echo "🔰 User '$GITHUB_ACTOR' is an ADMIN member."
-      exit 0
-    elif [[ "$code" -eq 0 ]]; then
-      echo "🧑‍💻 User '$GITHUB_ACTOR' is a DEV member."
-      exit 0
+    status_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM")
+    if [[ $? -eq 0 ]]; then
+      if [[ "$status_code" -eq 1 ]]; then
+        echo "🔰 User '$GITHUB_ACTOR' is an ADMIN member (status code = 1)"
+        exit 0
+      elif [[ "$status_code" -eq 0 ]]; then
+        echo "🧑‍💻 User '$GITHUB_ACTOR' is a DEV member (status code = 0)"
+        exit 0
+      fi
     fi
   done
 
