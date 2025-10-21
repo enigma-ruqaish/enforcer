@@ -38,15 +38,12 @@ check_team_membership() {
     "https://api.github.com/orgs/${org}/teams/${team}/memberships/${user}")
 
   if [[ "$status" == "200" ]]; then
-    echo "✅ User '$user' is a member of team '$team'."
-
     if [[ "$team" == "vortex-admin" ]]; then
-      echo 1  # status code for admin
-      return 0
+      echo 1   # Return code 1 = Admin
     elif [[ "$team" == "vortex-dev" ]]; then
-      echo 0  # status code for dev
-      return 0
+      echo 2   # Return code 2 = Dev
     fi
+    return 0
   fi
 
   return 1
@@ -59,13 +56,13 @@ main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
 
   for TEAM in "${ALLOWED_TEAMS[@]}"; do
-    status_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM")
+    role_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM")
     if [[ $? -eq 0 ]]; then
-      if [[ "$status_code" -eq 1 ]]; then
-        echo "🔰 User '$GITHUB_ACTOR' is an ADMIN member (status code = 1)"
+      if [[ "$role_code" -eq 1 ]]; then
+        echo "✅ User '$GITHUB_ACTOR' is a member of team '$TEAM' (Admin) — returning code 1"
         exit 0
-      elif [[ "$status_code" -eq 0 ]]; then
-        echo "🧑‍💻 User '$GITHUB_ACTOR' is a DEV member (status code = 0)"
+      elif [[ "$role_code" -eq 2 ]]; then
+        echo "✅ User '$GITHUB_ACTOR' is a member of team '$TEAM' (Dev) — returning code 2"
         exit 0
       fi
     fi
