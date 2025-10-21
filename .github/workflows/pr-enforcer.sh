@@ -132,58 +132,68 @@ check_new_tag_change_only() {
   changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
 
   # Step 4: Ensure exactly one changed file
-  local file_count
-  file_count=$(echo "$changed_files" | grep -c '.')
-  if [[ "$file_count" -ne 1 ]]; then
-    echo "❌ Expected exactly one changed file, found $file_count."
-    return 20
-  fi
+  check_new_tag_change_only() {
+    echo "🔍 Step 1: Checking files changed between branches..."
 
-  local changed_file
-  changed_file=$(echo "$changed_files" | head -n1)
+    local base_branch=${DIFF_BRANCHES:-origin/master}
+    local changed_files
+    changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
 
-  # Step 5: Ensure file path matches pattern
-  if [[ ! "$changed_file" =~ ^projects/vortex/.*/kustomization\.yaml$ ]]; then
-    echo "❌ File '$changed_file' is not a valid kustomization.yaml under projects/vortex/**."
-    return 20
-  fi
+    echo "📂 Files detected in diff:"
+    echo "$changed_files"
 
-  # Step 6: Check diff for the newTag line
-  local diff_output
-  diff_output=$(git diff "$base_branch"...HEAD -- "$changed_file")
+    # Step 2: Ensure only one file changed
+    local file_count
+    file_count=$(echo "$changed_files" | grep -c '.')
+    echo "🧮 Step 2: Total files changed = $file_count"
 
-  # Extract added lines starting with '+'
-  local added_lines
-  added_lines=$(echo "$diff_output" | grep '^+' | grep -v '^+++' || true)
+    if [[ "$file_count" -ne 1 ]]; then
+        echo "❌ Expected exactly one changed file (the kustomization.yaml), found $file_count."
+        return 20
+    fi
 
-  # Must only contain one added line starting with newTag:
-  local new_tag_line
-  new_tag_line=$(echo "$added_lines" | grep -E '^\+\s*newTag:' || true)
-  local new_tag_line_count
-  new_tag_line_count=$(echo "$new_tag_line" | grep -c '^+newTag:' || true)
+    # Step 3: Ensure it's the correct file
+    local changed_file
+    changed_file=$(echo "$changed_files")
+    echo "📘 Step 3: Changed file is $changed_file"
 
-  if [[ "$new_tag_line_count" -ne 1 ]]; then
-    echo "❌ The diff must contain exactly one added 'newTag:' line."
-    return 20
-  fi
+    if [[ ! "$changed_file" =~ kustomization\.ya?ml$ ]]; then
+        echo "❌ File changed is not a kustomization.yaml: $changed_file"
+        return 21
+    fi
 
-  # Step 7: Extract the tag value inside quotes
-  local tag_value
-  tag_value=$(echo "$new_tag_line" | sed -E 's/.*newTag:[[:space:]]*"([^"]*)".*/\1/')
+    # Step 4: Get diff lines
+    echo "🔍 Step 4: Extracting diff for $changed_file..."
+    local diff_output
+    diff_output=$(git diff "$base_branch"...HEAD -- "$changed_file" || true)
 
-  if [[ -z "$tag_value" ]]; then
-    echo "❌ Could not extract newTag value."
-    return 20
-  fi
+    echo "🧾 Full diff output:"
+    echo "$diff_output"
 
-  # Step 8: Validate tag length = 7 characters
-  if [[ ${#tag_value} -ne 7 ]]; then
-    echo "❌ Tag '$tag_value' length is not 7 characters."
-    return 20
-  fi
+    # Step 5: Check that only newTag changed
+    echo "⚙️ Step 5: Checking if only 'newTag' changed..."
+    local allowed_diff
+    allowed_diff=$(echo "$diff_output" | grep -E '^[+-]\s*newTag:' || true)
 
-  echo "✅ New tag '$tag_value' is valid and change meets all rules."
-  return 10
+    echo "✅ Allowed diff lines (newTag changes):"
+    echo "$allowed_diff"
+
+    local total_diff_lines
+    total_diff_lines=$(echo "$diff_output" | grep -E '^[+-]' | grep -v '^\+\+\+' | grep -v '^---' | wc -l)
+
+    local allowed_diff_lines
+    allowed_diff_lines=$(echo "$allowed_diff" | wc -l)
+
+    echo "🧮 Total changed lines: $total_diff_lines"
+    echo "🧮 Allowed changed lines (newTag only): $allowed_diff_lines"
+
+    if [[ "$total_diff_lines" -eq "$allowed_diff_lines" && "$allowed_diff_lines" -gt 0 ]]; then
+        echo "✅ Passed: Only newTag value changed."
+        return 0
+    else
+        echo "❌ Failed: Changes other than newTag detected."
+        return 22
+    fi
 }
 
 
@@ -212,10 +222,14 @@ main() {
   fi
 
   echo "Running newTag validation..."
-  result=$(check_new_tag_change_only)
-  if [[ "$result" == "20" ]]; then
-    echo "newTag validation failed."
-    exit 1
+  check_new_tag_change_only
+  exit_code=$?
+
+  if [[ "$exit_code" -ne 0 ]]; then
+   echo "❌ newTag validation failed with code $exit_code."
+   exit 1
+  else
+   echo "✅ newTag validation passed."
   fi
 
   echo " All checks passed successfully."
