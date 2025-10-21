@@ -81,6 +81,14 @@ check_allowed_files() {
 
 main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
+ 
+  allowed_code=$(check_allowed_files)
+  if [[ "$allowed_code" == "10" ]]; then
+    echo "Allowed file check passed — code 10"
+  else
+    echo "File restriction check failed"
+    exit 1
+  fi 
 
   for TEAM in "${ALLOWED_TEAMS[@]}"; do
     role_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM" || true)
@@ -96,14 +104,6 @@ main() {
 
   echo "Access denied: '$GITHUB_ACTOR' is not part of vortex-admin or vortex-dev teams."
   exit 1
-
-  allowed_code=$(check_allowed_files)
-  if [[ "$allowed_code" == "10" ]]; then
-    echo "Allowed file check passed — code 10"
-  else
-    echo "File restriction check failed"
-    exit 1
-  fi
 
 }
 
