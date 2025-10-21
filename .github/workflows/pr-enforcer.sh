@@ -221,34 +221,35 @@ main() {
   echo "📊 newTag validation result code: $new_tag_result"
 
   case "$new_tag_result" in
-    100)
-      echo "✅ Passed: Only 'newTag' (7-char commit) changed correctly."
-      ;;
-    20)
-      echo "❌ Failed: User is not in vortex-admin team."
-      exit 1
-      ;;
-    21)
-      echo "❌ Failed: More than one file changed — expected exactly one."
-      exit 1
-      ;;
-    22)
-      echo "❌ Failed: File is not within 'projects/vortex/**/kustomization.yaml'."
-      exit 1
-      ;;
-    23)
-      echo "❌ Failed: 'newTag' line is missing or invalid format (must be quoted 7-char commit)."
-      exit 1
-      ;;
-    24)
-      echo "❌ Failed: Other lines besides 'newTag' were changed."
-      exit 1
-      ;;
-    *)
-      echo "⚠️ Unexpected return code: $new_tag_result. Please debug."
-      exit 1
-      ;;
+  0)
+    echo "✅ Passed: Only 'newTag' (7-char commit) changed correctly."
+    ;;
+  20)
+    echo "❌ Failed: User is not in vortex-admin team."
+    exit 1
+    ;;
+  21)
+    echo "❌ Failed: More than one file changed — expected exactly one."
+    exit 1
+    ;;
+  22)
+    echo "❌ Failed: File is not within 'projects/vortex/**/kustomization.yaml'."
+    exit 1
+    ;;
+  23)
+    echo "❌ Failed: 'newTag' line is missing or invalid format (must be quoted 7-char commit)."
+    exit 1
+    ;;
+  24)
+    echo "❌ Failed: Other lines besides 'newTag' were changed."
+    exit 1
+    ;;
+  *)
+    echo "⚠️ Unexpected return code: $new_tag_result. Please debug."
+    exit 1
+    ;;
   esac
+
 
   echo " All checks passed successfully."
 }
