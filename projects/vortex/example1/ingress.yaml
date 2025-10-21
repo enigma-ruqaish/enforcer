@@ -14,7 +14,7 @@ spec:
   rules:
   - host: example-1.dubizzlelabs.run
     http:
-      paths:
+      paths:   
       - path: /
         pathType: Prefix
         backend:
