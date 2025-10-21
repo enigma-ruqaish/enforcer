@@ -6,6 +6,7 @@ ALLOWED_TEAMS=("vortex-dev" "vortex-admin")
 
 echo "Checking if user '$GITHUB_ACTOR' belongs to allowed teams..."
 
+#function 1 
 check_org_membership() {
   local user="$1"
   local org="$2"
@@ -21,6 +22,7 @@ check_org_membership() {
   fi
 }
 
+#function 2
 check_team_membership() {
   local user="$1"
   local org="$2"
@@ -43,6 +45,40 @@ check_team_membership() {
   return 1
 }
 
+#function 3 
+check_allowed_files() {
+  echo "Checking changed files..."
+
+  local base_branch="${BASE_BRANCH:-origin/main}"
+
+  local changed_files
+  changed_files=$(git diff --name-only "$base_branch"...HEAD)
+
+  if [[ -z "$changed_files" ]]; then
+    echo "No changed files detected."
+    echo 10
+    return 0
+  fi
+
+  local disallowed_found=false
+
+  while IFS= read -r file; do
+    if [[ ! "$file" =~ ^projects/vortex/ ]]; then
+      echo "Disallowed file detected: $file"
+      disallowed_found=true
+    fi
+  done <<< "$changed_files"
+
+  if [[ "$disallowed_found" == true ]]; then
+    echo "One or more files are outside the allowed directory (projects/vortex/**)."
+    exit 1
+  else
+    echo "All changed files are within allowed paths."
+    echo 10
+    return 0
+  fi
+}
+
 main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
 
@@ -60,6 +96,15 @@ main() {
 
   echo "Access denied: '$GITHUB_ACTOR' is not part of vortex-admin or vortex-dev teams."
   exit 1
+
+  allowed_code=$(check_allowed_files)
+  if [[ "$allowed_code" == "10" ]]; then
+    echo "Allowed file check passed — code 10"
+  else
+    echo "File restriction check failed"
+    exit 1
+  fi
+
 }
 
 main
