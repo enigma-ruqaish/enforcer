@@ -4,4 +4,4 @@ metadata:
   name: example-1
 spec:
   minReplicas: 1
-  maxReplicas: 3
+  maxReplicas: 5
