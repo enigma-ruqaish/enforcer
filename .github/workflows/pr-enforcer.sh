@@ -195,7 +195,7 @@ check_new_tag_change_only() {
         return 22
     fi
 }
-
+}
 
 main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
