@@ -51,18 +51,27 @@ check_allowed_files() {
 
   local base_branch="${BASE_BRANCH:-origin/main}"
 
-  # If origin/main doesn’t exist, fall back to previous commit
+  # Ensure we have a full git history for comparison
+  git fetch --depth=2 origin "$base_branch" >/dev/null 2>&1 || true
+
+  # If origin/main doesn’t exist or fetch fails, use previous commit safely
   if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
-    echo "Base branch '$base_branch' not found. Using previous commit (HEAD^)..."
-    base_branch="HEAD^"
+    if git rev-parse --verify "HEAD^" >/dev/null 2>&1; then
+      echo "⚠️ Base branch '$base_branch' not found, using previous commit (HEAD^)..."
+      base_branch="HEAD^"
+    else
+      echo "⚠️ No previous commit found — likely first commit or shallow clone."
+      echo 10
+      return 0
+    fi
   fi
 
-  # Get the list of changed files
+  # Try to get changed files
   local changed_files
-  changed_files=$(git diff --name-only "$base_branch"...HEAD || true)
+  changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
 
   if [[ -z "$changed_files" ]]; then
-    echo "No changed files detected."
+    echo "✅ No changed files detected."
     echo 10
     return 0
   fi
@@ -73,20 +82,18 @@ check_allowed_files() {
 
   local disallowed_found=false
 
-  # Check each changed file
   while IFS= read -r file; do
     if [[ ! "$file" =~ ^projects/vortex/ ]]; then
-      echo "Disallowed file detected: $file"
+      echo "❌ Disallowed file detected: $file"
       disallowed_found=true
     fi
   done <<< "$changed_files"
 
-  # Decision block
   if [[ "$disallowed_found" == true ]]; then
-    echo "One or more files are outside the allowed directory (projects/vortex/**)."
+    echo "🚫 One or more files are outside the allowed directory (projects/vortex/**)."
     exit 1
   else
-    echo "All changed files are within allowed paths."
+    echo "✅ All changed files are within allowed paths."
     echo 10
     return 0
   fi
