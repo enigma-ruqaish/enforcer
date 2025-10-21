@@ -75,8 +75,7 @@ check_allowed_files() {
 
   if [[ -z "$changed_files" ]]; then
     echo "No changed files detected."
-    echo 10
-    return 0
+    return 10
   fi
 
   echo "Changed files:"
@@ -93,13 +92,11 @@ check_allowed_files() {
   done <<< "$changed_files"
 
   if [[ "$disallowed_found" == true ]]; then
-    echo "One or more files are outside the allowed directory (projects/vortex/**)."
-    exit 1
-  else
-    echo "All changed files are within allowed paths."
-    echo 10
-    return 0
+    echo "One or more files are outside allowed path (projects/vortex/**)"
+    return 20
   fi
+   echo "All changed files are within allowed paths."
+  return 10
 }
 
 
@@ -107,94 +104,80 @@ check_allowed_files() {
 check_new_tag_change_only() {
   echo "🔎 Running new tag change validation..."
 
+  ### CHANGE: Added debug printing for every step
+  echo "🧩 Step 1: Checking if user is admin..."
   local role_code
   role_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "vortex-admin" || true)
+  echo "   → Role code: $role_code"
 
-  # Step 1: Must be an admin
   if [[ "$role_code" != "10" ]]; then
     echo "❌ User '$GITHUB_ACTOR' is not an admin — cannot perform tag-only changes."
     return 20
   fi
 
-  # Step 2: Must pass allowed files check
-  local allowed_code
-  allowed_code=$(check_allowed_files || true)
-  if [[ "$allowed_code" != "10" ]]; then
+  echo "🧩 Step 2: Running file restriction check..."
+  check_allowed_files
+  local allowed_code=$?
+  echo "   → File restriction return code: $allowed_code"
+
+  if [[ "$allowed_code" -ne 10 ]]; then
     echo "❌ File restriction check failed — disallowed files changed."
     return 20
   fi
 
-  # Step 3: Detect changed files
+  echo "🧩 Step 3: Detecting changed files..."
   local base_branch="${BASE_BRANCH:-origin/main}"
   git fetch origin "$base_branch" --depth=50 >/dev/null 2>&1 || true
-
   local changed_files
   changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
 
-  # Step 4: Ensure exactly one changed file
-  check_new_tag_change_only() {
-    echo "🔍 Step 1: Checking files changed between branches..."
+  echo "   → Changed files:"
+  echo "$changed_files"
 
-    local base_branch=${DIFF_BRANCHES:-origin/master}
-    local changed_files
-    changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
+  local file_count
+  file_count=$(echo "$changed_files" | grep -c '.')
+  echo "   → Total changed files: $file_count"
 
-    echo "📂 Files detected in diff:"
-    echo "$changed_files"
+  if [[ "$file_count" -ne 1 ]]; then
+    echo "❌ Expected exactly one changed file, found $file_count."
+    return 20
+  fi
 
-    # Step 2: Ensure only one file changed
-    local file_count
-    file_count=$(echo "$changed_files" | grep -c '.')
-    echo "🧮 Step 2: Total files changed = $file_count"
+  local changed_file
+  changed_file=$(echo "$changed_files" | head -n1)
+  echo "🧩 Step 4: Changed file path: $changed_file"
 
-    if [[ "$file_count" -ne 1 ]]; then
-        echo "❌ Expected exactly one changed file (the kustomization.yaml), found $file_count."
-        return 20
-    fi
+  if [[ ! "$changed_file" =~ ^projects/vortex/.*/kustomization\.ya?ml$ ]]; then
+    echo "❌ File '$changed_file' is not a valid kustomization.yaml."
+    return 20
+  fi
 
-    # Step 3: Ensure it's the correct file
-    local changed_file
-    changed_file=$(echo "$changed_files")
-    echo "📘 Step 3: Changed file is $changed_file"
+  echo "🧩 Step 5: Checking diff for 'newTag:'..."
+  local diff_output
+  diff_output=$(git diff "$base_branch"...HEAD -- "$changed_file")
+  echo "📜 Diff output:"
+  echo "$diff_output"
 
-    if [[ ! "$changed_file" =~ kustomization\.ya?ml$ ]]; then
-        echo "❌ File changed is not a kustomization.yaml: $changed_file"
-        return 21
-    fi
+  local added_lines
+  added_lines=$(echo "$diff_output" | grep -E '^[+-]\s*newTag:' || true)
+  echo "📘 newTag-related diff lines:"
+  echo "$added_lines"
 
-    # Step 4: Get diff lines
-    echo "🔍 Step 4: Extracting diff for $changed_file..."
-    local diff_output
-    diff_output=$(git diff "$base_branch"...HEAD -- "$changed_file" || true)
+  local total_diff_lines
+  total_diff_lines=$(echo "$diff_output" | grep -E '^[+-]' | grep -v '^\+\+\+' | grep -v '^---' | wc -l)
+  local newtag_diff_lines
+  newtag_diff_lines=$(echo "$added_lines" | wc -l)
 
-    echo "🧾 Full diff output:"
-    echo "$diff_output"
+  echo "   → Total diff lines: $total_diff_lines"
+  echo "   → newTag diff lines: $newtag_diff_lines"
 
-    # Step 5: Check that only newTag changed
-    echo "⚙️ Step 5: Checking if only 'newTag' changed..."
-    local allowed_diff
-    allowed_diff=$(echo "$diff_output" | grep -E '^[+-]\s*newTag:' || true)
-
-    echo "✅ Allowed diff lines (newTag changes):"
-    echo "$allowed_diff"
-
-    local total_diff_lines
-    total_diff_lines=$(echo "$diff_output" | grep -E '^[+-]' | grep -v '^\+\+\+' | grep -v '^---' | wc -l)
-
-    local allowed_diff_lines
-    allowed_diff_lines=$(echo "$allowed_diff" | wc -l)
-
-    echo "🧮 Total changed lines: $total_diff_lines"
-    echo "🧮 Allowed changed lines (newTag only): $allowed_diff_lines"
-
-    if [[ "$total_diff_lines" -eq "$allowed_diff_lines" && "$allowed_diff_lines" -gt 0 ]]; then
-        echo "✅ Passed: Only newTag value changed."
-        return 0
-    else
-        echo "❌ Failed: Changes other than newTag detected."
-        return 22
-    fi
-}
+  if [[ "$total_diff_lines" -eq "$newtag_diff_lines" && "$newtag_diff_lines" -gt 0 ]]; then
+    echo "✅ Passed: Only newTag changed."
+    return 10
+  else
+    echo "❌ Failed: Detected changes other than newTag."
+    return 20
+  fi
 }
 
 main() {
