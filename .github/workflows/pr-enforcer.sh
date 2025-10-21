@@ -179,8 +179,8 @@ check_new_tag_change_only() {
 
   if [[ "$total_diff_lines" -eq "$allowed_diff_lines" && "$allowed_diff_lines" -gt 0 ]]; then
     echo "✅ Step 7 passed: Only newTag value changed."
-    echo "🎯 [SUCCESS] All validation checks passed — returning 100."
-    return 100
+    echo "🎯 [SUCCESS] All validation checks passed — returning 0."
+    return 0
   else
     echo "❌ Step 7 failed: Detected changes other than newTag."
     return 24
