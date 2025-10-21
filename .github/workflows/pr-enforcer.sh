@@ -102,13 +102,22 @@ check_allowed_files() {
 main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
  
-  allowed_code=$(check_allowed_files)
-  if [[ "$allowed_code" == "10" ]]; then
-    echo "Allowed file check passed — code 10"
+  echo "🔹 Running file restriction check..."
+  if check_allowed_files >/tmp/check_allowed_files.log; then
+    allowed_code=$(grep -o '10' /tmp/check_allowed_files.log | tail -n1 || true)
   else
     echo "File restriction check failed"
+    cat /tmp/check_allowed_files.log
     exit 1
-  fi 
+  fi
+
+  if [[ "$allowed_code" == "10" ]]; then
+    echo "✅ Allowed file check passed — code 10"
+  else
+    echo "❌ File restriction check failed"
+    cat /tmp/check_allowed_files.log
+    exit 1
+  fi
 
   for TEAM in "${ALLOWED_TEAMS[@]}"; do
     role_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM" || true)
