@@ -24,4 +24,3 @@ patches:
 - path: patches/external-secret.yaml
 - path: patches/hpa.yaml
 - path: patches/ingress.yaml
-- path: patches/service-account.yaml

@@ -158,7 +158,7 @@ check_new_tag_change_only() {
 
   # Must only contain one added line starting with newTag:
   local new_tag_line
-  new_tag_line=$(echo "$added_lines" | grep '^+newTag:' || true)
+  new_tag_line=$(echo "$added_lines" | grep -E '^\+\s*newTag:' || true)
   local new_tag_line_count
   new_tag_line_count=$(echo "$new_tag_line" | grep -c '^+newTag:' || true)
 
