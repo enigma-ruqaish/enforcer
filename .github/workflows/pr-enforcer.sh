@@ -47,15 +47,14 @@ main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
 
   for TEAM in "${ALLOWED_TEAMS[@]}"; do
-    role_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM")
-    if [[ $? -eq 0 ]]; then
-      if [[ "$role_code" -eq 10 ]]; then
-        echo "User '$GITHUB_ACTOR' is a member of team '$TEAM' (Admin) — returning code 10"
-        exit 0
-      elif [[ "$role_code" -eq 20 ]]; then
-        echo "User '$GITHUB_ACTOR' is a member of team '$TEAM' (Dev) — returning code 20"
-        exit 0
-      fi
+    role_code=$(check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM" || true)
+
+    if [[ "$role_code" == "10" ]]; then
+      echo "User '$GITHUB_ACTOR' is a member of team '$TEAM' (Admin) — returning code 10"
+      exit 0
+    elif [[ "$role_code" == "20" ]]; then
+      echo "User '$GITHUB_ACTOR' is a member of team '$TEAM' (Dev) — returning code 20"
+      exit 0
     fi
   done
 
