@@ -7,7 +7,7 @@ resources:
 images:
 - name: lens
   newName: 89051.dkr.ecr.eu-west-1.amazonaws.com/lenexample
-  newTag: "828e6ad"
+  newTag: "828e687"
 
 generatorOptions:
   annotations:
