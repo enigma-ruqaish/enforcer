@@ -50,45 +50,53 @@ check_allowed_files() {
   echo "🔍 Checking changed files..."
   local base_branch="${BASE_BRANCH:-origin/main}"
 
-  git fetch --depth=2 origin "$base_branch" >/dev/null 2>&1 || true
+  # Ensure we have enough history for diff
+  git fetch origin "$base_branch" --depth=50 >/dev/null 2>&1 || true
 
+  # Handle shallow clones or missing base branch
   if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+    echo "⚠️ Base branch '$base_branch' not found, using previous commit (HEAD^)..."
     if git rev-parse --verify "HEAD^" >/dev/null 2>&1; then
-      echo "Base branch '$base_branch' not found, using previous commit (HEAD^)..."
       base_branch="HEAD^"
     else
-      echo "No previous commit found — likely first commit or shallow clone."
-      echo 10
-      return 0
+      echo "⚠️ No previous commit found — likely first commit. Enforcing allowed path rule manually..."
+      base_branch=""
     fi
   fi
 
-  local changed_files
-  changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
+  # Get changed files
+  local changed_files=""
+  if [[ -n "$base_branch" ]]; then
+    changed_files=$(git diff --name-only "$base_branch"...HEAD 2>/dev/null || true)
+  else
+    # In rare first-commit cases, list all tracked files
+    changed_files=$(git ls-files)
+  fi
 
   if [[ -z "$changed_files" ]]; then
-    echo "No changed files detected."
+    echo "✅ No changed files detected."
     echo 10
     return 0
   fi
 
-  echo "Changed files:"
+  echo "📂 Changed files:"
   echo "$changed_files"
   echo
 
   local disallowed_found=false
   while IFS= read -r file; do
+    # Only allow files under projects/vortex/**
     if [[ ! "$file" =~ ^projects/vortex/ ]]; then
-      echo "Disallowed file detected: $file"
+      echo "❌ Disallowed file detected: $file"
       disallowed_found=true
     fi
   done <<< "$changed_files"
 
   if [[ "$disallowed_found" == true ]]; then
-    echo "One or more files are outside the allowed directory (projects/vortex/**)."
+    echo "🚫 One or more files are outside the allowed directory (projects/vortex/**)."
     exit 1
   else
-    echo "All changed files are within allowed paths."
+    echo "✅ All changed files are within allowed paths."
     echo 10
     return 0
   fi
