@@ -46,7 +46,7 @@ check_team_membership() {
     fi
   fi
 
-  return 2  # Not a member of this team
+  return 2
 }
 
 # ----------------------------
@@ -56,15 +56,15 @@ main() {
   check_org_membership "$GITHUB_ACTOR" "$ORG"
 
   for TEAM in "${ALLOWED_TEAMS[@]}"; do
-    if check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM"; then
-      local code=$?
-      if [[ "$code" -eq 1 ]]; then
-        echo "🔰 User '$GITHUB_ACTOR' is an ADMIN member."
-        exit 0
-      elif [[ "$code" -eq 0 ]]; then
-        echo "🧑‍💻 User '$GITHUB_ACTOR' is a DEV member."
-        exit 0
-      fi
+    check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM"
+    local code=$?
+
+    if [[ "$code" -eq 1 ]]; then
+      echo "🔰 User '$GITHUB_ACTOR' is an ADMIN member."
+      exit 0
+    elif [[ "$code" -eq 0 ]]; then
+      echo "🧑‍💻 User '$GITHUB_ACTOR' is a DEV member."
+      exit 0
     fi
   done
 
