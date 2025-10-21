@@ -1,32 +1,75 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ORG="$ORG_NAME"
+ALLOWED_TEAMS=("vortex-dev" "vortex-admin")
+
 echo "🔍 Checking if user '$GITHUB_ACTOR' belongs to allowed teams..."
 
-ALLOWED_TEAMS=("vortex-dev" "vortex-admin")
-ORG="$ORG_NAME"
+# ----------------------------
+# 🔧 Function: check_org_membership
+# ----------------------------
+check_org_membership() {
+  local user="$1"
+  local org="$2"
 
-# Fetch user's teams using GitHub API
-USER_TEAMS=$(curl -s -H "Authorization: Bearer $ORG_TOKEN" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/orgs/${ORG}/memberships/${GITHUB_ACTOR}" | jq -r '.state // empty')
+  local state
+  state=$(curl -s -H "Authorization: Bearer $ORG_TOKEN" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/orgs/${org}/memberships/${user}" | jq -r '.state // empty')
 
-if [[ "$USER_TEAMS" != "active" ]]; then
-  echo "User '$GITHUB_ACTOR' is not an active member of the organization '$ORG'."
-  exit 1
-fi
-
-# Check team membership one by one
-for TEAM in "${ALLOWED_TEAMS[@]}"; do
-  IS_MEMBER=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer $ORG_TOKEN" \
-    "https://api.github.com/orgs/${ORG}/teams/${TEAM}/memberships/${GITHUB_ACTOR}")
-
-  if [[ "$IS_MEMBER" == "200" ]]; then
-    echo "User '$GITHUB_ACTOR' is a member of allowed team '${TEAM}'."
-    exit 0
+  if [[ "$state" != "active" ]]; then
+    echo "❌ User '$user' is not an active member of organization '$org'."
+    exit 1
   fi
-done
+}
 
-echo "Access denied: '$GITHUB_ACTOR' is not part of vortex-admin or vortex-dev teams."
-exit 1
+# ----------------------------
+# 🔧 Function: check_team_membership
+# ----------------------------
+check_team_membership() {
+  local user="$1"
+  local org="$2"
+  local team="$3"
+
+  local status
+  status=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $ORG_TOKEN" \
+    "https://api.github.com/orgs/${org}/teams/${team}/memberships/${user}")
+
+  if [[ "$status" == "200" ]]; then
+    echo "✅ User '$user' is a member of team '$team'."
+    if [[ "$team" == "vortex-admin" ]]; then
+      return 1
+    elif [[ "$team" == "vortex-dev" ]]; then
+      return 0
+    fi
+  fi
+
+  return 2  # Not a member of this team
+}
+
+# ----------------------------
+# 🚀 Main logic
+# ----------------------------
+main() {
+  check_org_membership "$GITHUB_ACTOR" "$ORG"
+
+  for TEAM in "${ALLOWED_TEAMS[@]}"; do
+    if check_team_membership "$GITHUB_ACTOR" "$ORG" "$TEAM"; then
+      local code=$?
+      if [[ "$code" -eq 1 ]]; then
+        echo "🔰 User '$GITHUB_ACTOR' is an ADMIN member."
+        exit 0
+      elif [[ "$code" -eq 0 ]]; then
+        echo "🧑‍💻 User '$GITHUB_ACTOR' is a DEV member."
+        exit 0
+      fi
+    fi
+  done
+
+  echo "🚫 Access denied: '$GITHUB_ACTOR' is not part of vortex-admin or vortex-dev teams."
+  exit 1
+}
+
+main
