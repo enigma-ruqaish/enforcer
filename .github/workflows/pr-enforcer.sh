@@ -47,12 +47,19 @@ check_team_membership() {
 
 #function 3 
 check_allowed_files() {
-  echo "Checking changed files..."
+  echo "🔍 Checking changed files..."
 
   local base_branch="${BASE_BRANCH:-origin/main}"
 
+  # If origin/main doesn’t exist, fall back to previous commit
+  if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+    echo "Base branch '$base_branch' not found. Using previous commit (HEAD^)..."
+    base_branch="HEAD^"
+  fi
+
+  # Get the list of changed files
   local changed_files
-  changed_files=$(git diff --name-only "$base_branch"...HEAD)
+  changed_files=$(git diff --name-only "$base_branch"...HEAD || true)
 
   if [[ -z "$changed_files" ]]; then
     echo "No changed files detected."
@@ -60,8 +67,13 @@ check_allowed_files() {
     return 0
   fi
 
+  echo "Changed files:"
+  echo "$changed_files"
+  echo
+
   local disallowed_found=false
 
+  # Check each changed file
   while IFS= read -r file; do
     if [[ ! "$file" =~ ^projects/vortex/ ]]; then
       echo "Disallowed file detected: $file"
@@ -69,6 +81,7 @@ check_allowed_files() {
     fi
   done <<< "$changed_files"
 
+  # Decision block
   if [[ "$disallowed_found" == true ]]; then
     echo "One or more files are outside the allowed directory (projects/vortex/**)."
     exit 1
