@@ -90,23 +90,28 @@ user_in_team() {
 check_team_membership() {
   local project_name
   project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
-  local full_team
-  full_team=$(grep -E "^projects/${project_name}/" CODEOWNERS | awk '{print $3}')
 
-  if [[ -z "$full_team" ]]; then
-    github_comment ":warning: No matching team found in CODEOWNERS for project '${project_name}'."
+  # Check if the project exists in TEAM_MAP
+  if [[ -z "${TEAM_MAP[$project_name]:-}" ]]; then
+    github_comment ":warning: No team mapping found in TEAM_MAP for project '${project_name}'."
     error "No team mapping found for project '${project_name}'"
   fi
 
-  local ORG TEAM
-  ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
-  TEAM=$(echo "$full_team" | awk -F'/' '{print $2}')
+  local ORG="enigma-ruqaish"  # 👈 adjust this if needed
+  local TEAMS=(${TEAM_MAP[$project_name]})
+  local user_allowed=false
 
-  if user_in_team "$ORG" "$TEAM"; then
-    log "✅ User ${PR_AUTHOR} is part of ${TEAM} team."
-  else
-    github_comment ":x: User **${PR_AUTHOR}** is not part of the authorized team (**${TEAM}**) for this project."
-    error "User ${PR_AUTHOR} not in authorized team ${TEAM}"
+  for TEAM in "${TEAMS[@]}"; do
+    if user_in_team "$ORG" "$TEAM"; then
+      log "✅ User ${PR_AUTHOR} is part of ${TEAM} team."
+      user_allowed=true
+      break
+    fi
+  done
+
+  if [[ "$user_allowed" == false ]]; then
+    github_comment ":x: User **${PR_AUTHOR}** is not part of the authorized teams (**${TEAMS[*]}**) for this project."
+    error "User ${PR_AUTHOR} not in authorized team(s): ${TEAMS[*]}"
   fi
 }
 
