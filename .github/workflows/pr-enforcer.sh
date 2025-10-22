@@ -155,22 +155,37 @@ main() {
   check_team_membership
 
   if detect_image_tag_change; then
-    log "Detected image tag update..."
-    local project_name
-    project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
-    local full_team
-    full_team=$(grep -E "^projects/${project_name}/.*/live/kustomization.yaml" CODEOWNERS | awk '{print $3}' || true)
+  log "Detected image tag update..."
 
-    if [[ -n "$full_team" ]]; then
-      local ORG TEAM
-      ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
-      TEAM=$(echo "$full_team" | awk -F'/' '{print $2}')
-      if user_in_team "$ORG" "$TEAM"; then
-        auto_approve_pr
-        exit 0
+  local project_name
+  project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
+  local full_team
+  full_team=$(grep -E "^projects/${project_name}/.*/live/kustomization.yaml" CODEOWNERS | awk '{print $3}' || true)
+
+  if [[ -n "$full_team" ]]; then
+    local ORG TEAM
+    ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
+    TEAM=$(echo "$full_team" | awk -F'/' '{print $2}')
+
+    if user_in_team "$ORG" "$TEAM"; then
+      # ✅ Check if this is an admin and tag is 7 chars long
+      if [[ "$TEAM" == *"-admin" ]]; then
+        NEW_TAG=$(git diff origin/master...HEAD | grep -Eo '[a-z0-9]{7}' | tail -1)
+        TAG_LENGTH=${#NEW_TAG}
+
+        if [[ $TAG_LENGTH -eq 7 ]]; then
+          log "✅ Detected 7-character tag ($NEW_TAG). Auto-approving..."
+          gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin"
+          exit 0
+        else
+          log "Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
+        fi
+      else
+        log "User is not an admin. Skipping auto-approval."
       fi
     fi
   fi
+fi
 
   log "No auto-approval applied. PR requires manual review."
 }
