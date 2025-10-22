@@ -11,7 +11,7 @@ ALLOWED_FILES_REGEX="(deployment\.yaml|hpa\.yaml|ingress\.yaml|kustomization\.ya
 # Temporary workspace for GitHub data
 GITHUB_JSON="github.json"
 DIFF_BRANCHES="origin/$(jq -r '.base_ref' $GITHUB_JSON)..origin/$(jq -r '.head_ref' $GITHUB_JSON)"
-REPO="$(jq -r '.repository.full_name' $GITHUB_JSON)"
+REPO="$(jq -r '.event.repository.full_name' $GITHUB_JSON)"
 PR_NUMBER="$(jq -r '.event.pull_request.number' $GITHUB_JSON)"
 PR_AUTHOR="$(jq -r '.event.pull_request.user.login' $GITHUB_JSON)"
 
