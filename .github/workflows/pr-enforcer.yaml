@@ -2,27 +2,29 @@ name: PR Enforcer
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    branches: [ "master" ]
+    types: ["opened", "synchronize", "reopened", "labeled", "unlabeled", "edited"]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   enforce:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v3
 
-      - name: Set up dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq curl
-
-      - name: Run PR Enforcer
+      - name: Verify, Enforce & Auto Approve
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORG_TOKEN: ${{ secrets.ORG_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          ORG_NAME: "enigma-ruqaish"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          chmod +x .github/workflows/pr-enforcer.sh
-          .github/workflows/pr-enforcer.sh
+          # Save the full GitHub event context
+          cat << OBJECT > github.json
+          ${{ toJson(github) }}
+          OBJECT
+
+          # Run the enforcement logic
+          . .github/workflows/pr-enforcer.sh
