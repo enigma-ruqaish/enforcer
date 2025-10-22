@@ -70,6 +70,13 @@ validate_changed_files() {
 #  TEAM MEMBERSHIP CHECK
 #############################################
 
+declare -A TEAM_MAP=(
+  ["kevlar"]="kevlar"
+  ["marvel"]="autos"
+  ["vortex"]="vortex-admin vortex-dev"
+)
+
+
 # Determine if user belongs to a GitHub team
 user_in_team() {
   local ORG="$1"
