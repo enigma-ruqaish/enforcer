@@ -176,6 +176,14 @@ main() {
         if [[ $TAG_LENGTH -eq 7 ]]; then
           log "✅ Detected 7-character tag ($NEW_TAG). Auto-approving..."
           gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin"
+          curl -s -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${ORG_TOKEN}" \
+            -d "{\"body\":\"Auto-approved: 7-char tag change by admin (${PR_AUTHOR})\",\"event\":\"APPROVE\"}" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews" > /dev/null
+
+          github_comment "✅ Auto-approved: 7-char tag change by admin (${PR_AUTHOR})."
+          log "✅ Auto-approved PR #${PR_NUMBER} for 7-char tag change by ${PR_AUTHOR}"
           exit 0
         else
           log "Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
