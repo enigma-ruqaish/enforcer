@@ -155,47 +155,51 @@ main() {
   check_team_membership
 
   if detect_image_tag_change; then
-  log "Detected image tag update..."
+    log "Detected image tag update..."
 
-  local project_name
-  project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
-  local full_team
-  full_team=$(grep -E "^projects/${project_name}/.*/live/kustomization.yaml" CODEOWNERS | awk '{print $3}' || true)
+    local project_name
+    project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
+    local full_team
+    full_team=$(grep -E "^projects/${project_name}/.*/live/kustomization.yaml" CODEOWNERS | awk '{print $3}' || true)
 
-  if [[ -n "$full_team" ]]; then
-    local ORG TEAM
-    ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
-    TEAM=$(echo "$full_team" | awk -F'/' '{print $2}')
+    if [[ -n "$full_team" ]]; then
+      local ORG TEAM
+      ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
+      TEAM=$(echo "$full_team" | awk -F'/' '{print $2}')
 
-    if user_in_team "$ORG" "$TEAM"; then
-      # ✅ Check if this is an admin and tag is 7 chars long
-      if [[ "$TEAM" == *"-admin" ]]; then
-        NEW_TAG=$(git diff origin/master...HEAD | grep -Eo '[a-z0-9]{7}' | tail -1)
-        TAG_LENGTH=${#NEW_TAG}
+      if user_in_team "$ORG" "$TEAM"; then
+        # ✅ Auto-approve if admin + tag = 7 chars
+        if [[ "$TEAM" == *"-admin" ]]; then
+          NEW_TAG=$(git diff origin/master...HEAD | grep -Eo '[a-z0-9]{7}' | tail -1)
+          TAG_LENGTH=${#NEW_TAG}
 
-        if [[ $TAG_LENGTH -eq 7 ]]; then
-          log "✅ Detected 7-character tag ($NEW_TAG). Auto-approving..."
-          gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin"
-          curl -s -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${ORG_TOKEN}" \
-            -d "{\"body\":\"Auto-approved: 7-char tag change by admin (${PR_AUTHOR})\",\"event\":\"APPROVE\"}" \
-            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews" > /dev/null
+          if [[ $TAG_LENGTH -eq 7 ]]; then
+            log "✅ Detected 7-character tag ($NEW_TAG). Auto-approving..."
+            gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin"
+            curl -s -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${ORG_TOKEN}" \
+              -d "{\"body\":\"Auto-approved: 7-char tag change by admin (${PR_AUTHOR})\",\"event\":\"APPROVE\"}" \
+              "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews" > /dev/null
 
-          github_comment "✅ Auto-approved: 7-char tag change by admin (${PR_AUTHOR})."
-          log "✅ Auto-approved PR #${PR_NUMBER} for 7-char tag change by ${PR_AUTHOR}"
-          exit 0
+            github_comment "✅ Auto-approved: 7-char tag change by admin (${PR_AUTHOR})."
+            log "✅ Auto-approved PR #${PR_NUMBER} for 7-char tag change by ${PR_AUTHOR}"
+            exit 0
+          else
+            log "Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
+          fi
         else
-          log "Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
+          log "User is not an admin. Skipping auto-approval."
         fi
-      else
-        log "User is not an admin. Skipping auto-approval."
       fi
     fi
   fi
-fi
 
-  log "No auto-approval applied. PR requires manual review."
+  # ⚠️ Require enigma-devops review for all other PRs
+  log "No auto-approval applied. Tagging enigma-devops for review..."
+  github_comment ":eyes: This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
+  exit 0
 }
 
 main "$@"
+
