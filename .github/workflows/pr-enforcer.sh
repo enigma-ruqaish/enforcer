@@ -154,22 +154,25 @@ main() {
   log "Checking team membership..."
   check_team_membership
 
+  # Authenticate GH CLI (ensures gh pr review works)
+  echo "${GITHUB_TOKEN}" | gh auth login --with-token >/dev/null 2>&1 || true
+
   if detect_image_tag_change; then
     log "Detected image tag update..."
 
     local project_name
     project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
-    # 🟩 CHANGE: Match all CODEOWNERS lines for this project (can return multiple teams)
+    # 🟩 Match all CODEOWNERS lines for this project (can return multiple teams)
     local full_teams
     full_teams=$(grep -E "^projects/${project_name}/\*\*" CODEOWNERS | awk '{for (i=2;i<=NF;i++) print $i}' || true)
 
-    # 🟩 CHANGE: Debug visibility
+    # 🟩 Debug visibility
     log "Detected CODEOWNERS entry for ${project_name}: ${full_teams}"
 
     local found_admin_team=false
 
-    # 🟩 CHANGE: Loop through all teams (vortex-dev and vortex-admin)
+    # 🟩 Loop through all teams (e.g., vortex-dev and vortex-admin)
     for full_team in $full_teams; do
       local ORG TEAM
       ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
@@ -184,27 +187,25 @@ main() {
         if [[ "$TEAM" == *"-admin" ]]; then
           found_admin_team=true
 
-          # 🟩 CHANGE: Dynamic base_ref (supports both main and master)
+          # 🟩 Dynamic base_ref (supports both main and master)
           local BASE_REF
           BASE_REF=$(jq -r '.base_ref' "$GITHUB_JSON")
 
-          # 🟩 CHANGE: Use dynamic diff to extract 7-char commit tag
+          # 🟩 Extract 7-char commit tag
           NEW_TAG=$(git diff origin/${BASE_REF}...HEAD | grep -Eo '[a-f0-9]{7}' | tail -1)
           TAG_LENGTH=${#NEW_TAG}
 
           if [[ $TAG_LENGTH -eq 7 ]]; then
-            log "✅ Detected 7-character tag ($NEW_TAG). Auto-approving..."
+            log "✅ Detected 7-character tag ($NEW_TAG). Attempting auto-approval..."
 
-            # 🟩 CHANGE: Unified GH + API approval for redundancy
-            gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin"
-            curl -s -X POST \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${ORG_TOKEN}" \
-              -d "{\"body\":\"Auto-approved: 7-char tag change by admin (${PR_AUTHOR})\",\"event\":\"APPROVE\"}" \
-              "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews" > /dev/null
+            # 🟩 Improved approval logic with fallback
+            if gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin (${PR_AUTHOR})"; then
+              log "✅ Auto-approval submitted successfully."
+            else
+              log "⚠️ GitHub API blocked auto-approval (likely Actions restriction). Posting comment instead."
+              github_comment "✅ Tag validated and ready. Manual approval required since GitHub Actions cannot auto-approve via this token."
+            fi
 
-            github_comment "✅ Auto-approved: 7-char tag change by admin (${PR_AUTHOR})."
-            log "✅ Auto-approved PR #${PR_NUMBER} for 7-char tag change by ${PR_AUTHOR}"
             exit 0
           else
             log "⚠️ Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
@@ -215,7 +216,7 @@ main() {
       fi
     done
 
-    # 🟩 CHANGE: Handle case when user not in any of the CODEOWNERS teams
+    # 🟩 Handle case when user not in any admin teams
     if [[ "$found_admin_team" == false ]]; then
       log "User ${PR_AUTHOR} not in CODEOWNERS admin team (${full_teams}). Skipping auto-approval."
     fi
