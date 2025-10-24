@@ -6,7 +6,7 @@ spec:
   template:
     spec:
       containers:
-      - name: example-1
+      - name: example-1cssc
         resources:
           requests:
             cpu: 500m
