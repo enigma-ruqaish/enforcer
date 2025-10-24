@@ -9,7 +9,7 @@ metadata:
 spec:
   tls:
   - hosts:
-    - example-1.dubizzlelabs.run
+    - example-1.dubizzlelabs.r
     - example-1.dubizzlelabs.run
   rules:
   - host: example-1.dubizzlelabs.run
