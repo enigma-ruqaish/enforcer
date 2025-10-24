@@ -4,7 +4,7 @@ metadata:
   name: symbius
   annotations:
     alb.ingress.kubernetes.io/group.name: example-1stage
-    alb.ingress.kubernetes.io/group.order: "125"
+    alb.ingress.kubernetes.io/group.order: "1233"
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-west-1:5946289051:certificate/f265
 spec:
   tls:
