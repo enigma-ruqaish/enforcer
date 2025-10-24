@@ -16,7 +16,7 @@ spec:
     http:
       paths:
       - path: /
-        pathType: Prefix
+        pathType: Prx
         backend:
           service:
             name: symbius
