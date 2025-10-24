@@ -159,22 +159,37 @@ main() {
 
     local project_name
     project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
+
+    # 🟩 CHANGE: Updated grep pattern to match your actual CODEOWNERS file format
     local full_team
-    full_team=$(grep -E "^projects/${project_name}/.*/live/kustomization.yaml" CODEOWNERS | awk '{print $3}' || true)
+    full_team=$(grep -E "^projects/${project_name}/\*\*" CODEOWNERS | awk '{print $2}' || true)
+
+    # 🟩 CHANGE: Added debug log for visibility
+    log "Detected CODEOWNERS entry for ${project_name}: ${full_team}"
 
     if [[ -n "$full_team" ]]; then
+      # 🟩 CHANGE: Extract org/team from @org/team format
       local ORG TEAM
       ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
       TEAM=$(echo "$full_team" | awk -F'/' '{print $2}')
 
+      # 🟩 CHANGE: Check if user belongs to the matched CODEOWNERS team
       if user_in_team "$ORG" "$TEAM"; then
-        # ✅ Auto-approve if admin + tag = 7 chars
+
+        # ✅ Auto-approve only if user is in an "-admin" team
         if [[ "$TEAM" == *"-admin" ]]; then
-          NEW_TAG=$(git diff origin/master...HEAD | grep -Eo '[a-z0-9]{7}' | tail -1)
+          # 🟩 CHANGE: Use base_ref dynamically (main/master agnostic)
+          local BASE_REF
+          BASE_REF=$(jq -r '.base_ref' "$GITHUB_JSON")
+
+          # 🟩 CHANGE: More accurate diff reference
+          NEW_TAG=$(git diff origin/${BASE_REF}...HEAD | grep -Eo '[a-z0-9]{7}' | tail -1)
           TAG_LENGTH=${#NEW_TAG}
 
           if [[ $TAG_LENGTH -eq 7 ]]; then
             log "✅ Detected 7-character tag ($NEW_TAG). Auto-approving..."
+
+            # 🟩 CHANGE: Unified approval through both gh and GitHub API for redundancy
             gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin"
             curl -s -X POST \
               -H "Accept: application/vnd.github+json" \
@@ -191,7 +206,12 @@ main() {
         else
           log "User is not an admin. Skipping auto-approval."
         fi
+      else
+        log "User ${PR_AUTHOR} not in CODEOWNERS team (${TEAM}). Skipping auto-approval."
       fi
+    else
+      # 🟩 CHANGE: Added fallback log if CODEOWNERS entry not found
+      log "No CODEOWNERS entry found for ${project_name}, skipping auto-approval."
     fi
   fi
 
@@ -202,4 +222,3 @@ main() {
 }
 
 main "$@"
-
