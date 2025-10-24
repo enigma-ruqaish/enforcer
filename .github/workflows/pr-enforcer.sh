@@ -160,36 +160,42 @@ main() {
     local project_name
     project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
-    # 🟩 CHANGE: Updated grep pattern to match your actual CODEOWNERS file format
-    local full_team
-    full_team=$(grep -E "^projects/${project_name}/\*\*" CODEOWNERS | awk '{print $2}' || true)
+    # 🟩 CHANGE: Match all CODEOWNERS lines for this project (can return multiple teams)
+    local full_teams
+    full_teams=$(grep -E "^projects/${project_name}/\*\*" CODEOWNERS | awk '{for (i=2;i<=NF;i++) print $i}' || true)
 
-    # 🟩 CHANGE: Added debug log for visibility
-    log "Detected CODEOWNERS entry for ${project_name}: ${full_team}"
+    # 🟩 CHANGE: Debug visibility
+    log "Detected CODEOWNERS entry for ${project_name}: ${full_teams}"
 
-    if [[ -n "$full_team" ]]; then
-      # 🟩 CHANGE: Extract org/team from @org/team format
+    local found_admin_team=false
+
+    # 🟩 CHANGE: Loop through all teams (vortex-dev and vortex-admin)
+    for full_team in $full_teams; do
       local ORG TEAM
       ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
       TEAM=$(echo "$full_team" | awk -F'/' '{print $2}')
 
-      # 🟩 CHANGE: Check if user belongs to the matched CODEOWNERS team
-      if user_in_team "$ORG" "$TEAM"; then
+      log "Checking membership for ${PR_AUTHOR} in ${ORG}/${TEAM}..."
 
-        # ✅ Auto-approve only if user is in an "-admin" team
+      if user_in_team "$ORG" "$TEAM"; then
+        log "✅ User ${PR_AUTHOR} is part of ${TEAM}"
+
+        # ✅ Auto-approve only if in an admin team
         if [[ "$TEAM" == *"-admin" ]]; then
-          # 🟩 CHANGE: Use base_ref dynamically (main/master agnostic)
+          found_admin_team=true
+
+          # 🟩 CHANGE: Dynamic base_ref (supports both main and master)
           local BASE_REF
           BASE_REF=$(jq -r '.base_ref' "$GITHUB_JSON")
 
-          # 🟩 CHANGE: More accurate diff reference
-          NEW_TAG=$(git diff origin/${BASE_REF}...HEAD | grep -Eo '[a-z0-9]{7}' | tail -1)
+          # 🟩 CHANGE: Use dynamic diff to extract 7-char commit tag
+          NEW_TAG=$(git diff origin/${BASE_REF}...HEAD | grep -Eo '[a-f0-9]{7}' | tail -1)
           TAG_LENGTH=${#NEW_TAG}
 
           if [[ $TAG_LENGTH -eq 7 ]]; then
             log "✅ Detected 7-character tag ($NEW_TAG). Auto-approving..."
 
-            # 🟩 CHANGE: Unified approval through both gh and GitHub API for redundancy
+            # 🟩 CHANGE: Unified GH + API approval for redundancy
             gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin"
             curl -s -X POST \
               -H "Accept: application/vnd.github+json" \
@@ -201,21 +207,23 @@ main() {
             log "✅ Auto-approved PR #${PR_NUMBER} for 7-char tag change by ${PR_AUTHOR}"
             exit 0
           else
-            log "Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
+            log "⚠️ Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
           fi
         else
-          log "User is not an admin. Skipping auto-approval."
+          log "ℹ️ User ${PR_AUTHOR} is in ${TEAM}, but not an admin team. Skipping auto-approval."
         fi
-      else
-        log "User ${PR_AUTHOR} not in CODEOWNERS team (${TEAM}). Skipping auto-approval."
       fi
-    else
-      # 🟩 CHANGE: Added fallback log if CODEOWNERS entry not found
-      log "No CODEOWNERS entry found for ${project_name}, skipping auto-approval."
+    done
+
+    # 🟩 CHANGE: Handle case when user not in any of the CODEOWNERS teams
+    if [[ "$found_admin_team" == false ]]; then
+      log "User ${PR_AUTHOR} not in CODEOWNERS admin team (${full_teams}). Skipping auto-approval."
     fi
+  else
+    log "No image tag change detected, skipping auto-approval logic."
   fi
 
-  # ⚠️ Require enigma-devops review for all other PRs
+  # ⚠️ Require manual review from enigma-devops otherwise
   log "No auto-approval applied. Tagging enigma-devops for review..."
   github_comment ":eyes: This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
   exit 0
