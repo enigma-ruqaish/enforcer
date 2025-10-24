@@ -1,23 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-#############################################
-#  CONFIGURATION
-#############################################
-
 # Allowed file types for modification
 ALLOWED_FILES_REGEX="(deployment\.yaml|hpa\.yaml|ingress\.yaml|kustomization\.yaml)$"
 
-# Temporary workspace for GitHub data
 GITHUB_JSON="github.json"
 DIFF_BRANCHES="origin/$(jq -r '.base_ref' $GITHUB_JSON)..origin/$(jq -r '.head_ref' $GITHUB_JSON)"
 REPO="$(jq -r '.event.repository.full_name' $GITHUB_JSON)"
 PR_NUMBER="$(jq -r '.event.pull_request.number' $GITHUB_JSON)"
 PR_AUTHOR="$(jq -r '.event.pull_request.user.login' $GITHUB_JSON)"
-
-#############################################
-#  UTILITIES
-#############################################
 
 log() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 warn() { echo -e "\033[1;33m[WARN]\033[0m $*"; }
@@ -40,9 +31,6 @@ install_yq() {
   fi
 }
 
-#############################################
-#  GIT DIFF & VALIDATION
-#############################################
 
 fetch_branches() {
   git fetch origin "$(jq -r '.base_ref' $GITHUB_JSON)" "$(jq -r '.head_ref' $GITHUB_JSON)"
@@ -66,9 +54,6 @@ validate_changed_files() {
   fi
 }
 
-#############################################
-#  TEAM MEMBERSHIP CHECK
-#############################################
 
 declare -A TEAM_MAP=(
   ["kevlar"]="kevlar"
@@ -77,7 +62,6 @@ declare -A TEAM_MAP=(
 )
 
 
-# Determine if user belongs to a GitHub team
 user_in_team() {
   local ORG="$1"
   local TEAM="$2"
@@ -91,19 +75,18 @@ check_team_membership() {
   local project_name
   project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
-  # Check if the project exists in TEAM_MAP
   if [[ -z "${TEAM_MAP[$project_name]:-}" ]]; then
     github_comment ":warning: No team mapping found in TEAM_MAP for project '${project_name}'."
     error "No team mapping found for project '${project_name}'"
   fi
 
-  local ORG="enigma-ruqaish"  # 👈 adjust this if needed
+  local ORG="enigma-ruqaish"
   local TEAMS=(${TEAM_MAP[$project_name]})
   local user_allowed=false
 
   for TEAM in "${TEAMS[@]}"; do
     if user_in_team "$ORG" "$TEAM"; then
-      log "✅ User ${PR_AUTHOR} is part of ${TEAM} team."
+      log "User ${PR_AUTHOR} is part of ${TEAM} team."
       user_allowed=true
       break
     fi
@@ -115,9 +98,6 @@ check_team_membership() {
   fi
 }
 
-#############################################
-#  IMAGE TAG CHECK & AUTO APPROVAL
-#############################################
 
 detect_image_tag_change() {
   git diff -U0 ${DIFF_BRANCHES} | grep -E '^\+' | grep -q 'newTag' || return 1
@@ -136,13 +116,9 @@ auto_approve_pr() {
     -d '{"event":"APPROVE"}' \
     "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews" > /dev/null
 
-  github_comment "✅ Auto-approved: Image tag update by authorized team lead (${PR_AUTHOR})."
-  log "✅ Auto-approved image tag change by ${PR_AUTHOR}"
+  github_comment "Auto-approved: Image tag update by authorized team lead (${PR_AUTHOR})."
+  log "Auto-approved image tag change by ${PR_AUTHOR}"
 }
-
-#############################################
-#  MAIN EXECUTION FLOW
-#############################################
 
 main() {
   log "Fetching branches..."
@@ -154,7 +130,6 @@ main() {
   log "Checking team membership..."
   check_team_membership
 
-  # Authenticate GH CLI (ensures gh pr review works)
   echo "${GITHUB_TOKEN}" | gh auth login --with-token >/dev/null 2>&1 || true
 
   if detect_image_tag_change; then
@@ -163,16 +138,13 @@ main() {
     local project_name
     project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
-    # 🟩 Match all CODEOWNERS lines for this project (can return multiple teams)
     local full_teams
     full_teams=$(grep -E "^projects/${project_name}/\*\*" CODEOWNERS | awk '{for (i=2;i<=NF;i++) print $i}' || true)
 
-    # 🟩 Debug visibility
     log "Detected CODEOWNERS entry for ${project_name}: ${full_teams}"
 
     local found_admin_team=false
 
-    # 🟩 Loop through all teams (e.g., vortex-dev and vortex-admin)
     for full_team in $full_teams; do
       local ORG TEAM
       ORG=$(echo "$full_team" | awk -F'/' '{print $1}' | sed 's/@//')
@@ -181,42 +153,37 @@ main() {
       log "Checking membership for ${PR_AUTHOR} in ${ORG}/${TEAM}..."
 
       if user_in_team "$ORG" "$TEAM"; then
-        log "✅ User ${PR_AUTHOR} is part of ${TEAM}"
+        log " User ${PR_AUTHOR} is part of ${TEAM}"
 
-        # ✅ Auto-approve only if in an admin team
         if [[ "$TEAM" == *"-admin" ]]; then
           found_admin_team=true
 
-          # 🟩 Dynamic base_ref (supports both main and master)
           local BASE_REF
           BASE_REF=$(jq -r '.base_ref' "$GITHUB_JSON")
 
-          # 🟩 Extract 7-char commit tag
           NEW_TAG=$(git diff origin/${BASE_REF}...HEAD | grep -Eo '[a-f0-9]{7}' | tail -1)
           TAG_LENGTH=${#NEW_TAG}
 
           if [[ $TAG_LENGTH -eq 7 ]]; then
-            log "✅ Detected 7-character tag ($NEW_TAG). Attempting auto-approval..."
+            log "Detected 7-character tag ($NEW_TAG). Attempting auto-approval..."
 
-            # 🟩 Improved approval logic with fallback
             if gh pr review "$PR_NUMBER" --approve --body "Auto-approved: 7-char tag change by admin (${PR_AUTHOR})"; then
-              log "✅ Auto-approval submitted successfully."
+              log " Auto-approval submitted successfully."
             else
-              log "⚠️ GitHub API blocked auto-approval (likely Actions restriction). Posting comment instead."
-              github_comment "✅ Tag validated and ready. Manual approval required since GitHub Actions cannot auto-approve via this token."
+              log " GitHub API blocked auto-approval (likely Actions restriction). Posting comment instead."
+              github_comment " Tag validated and ready. Manual approval required since GitHub Actions cannot auto-approve via this token."
             fi
 
             exit 0
           else
-            log "⚠️ Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
+            log "Tag found but not 7 characters ($TAG_LENGTH). Skipping auto-approval."
           fi
         else
-          log "ℹ️ User ${PR_AUTHOR} is in ${TEAM}, but not an admin team. Skipping auto-approval."
+          log "ℹUser ${PR_AUTHOR} is in ${TEAM}, but not an admin team. Skipping auto-approval."
         fi
       fi
     done
 
-    # 🟩 Handle case when user not in any admin teams
     if [[ "$found_admin_team" == false ]]; then
       log "User ${PR_AUTHOR} not in CODEOWNERS admin team (${full_teams}). Skipping auto-approval."
     fi
@@ -224,7 +191,6 @@ main() {
     log "No image tag change detected, skipping auto-approval logic."
   fi
 
-  # ⚠️ Require manual review from enigma-devops otherwise
   log "No auto-approval applied. Tagging enigma-devops for review..."
   github_comment ":eyes: This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
   exit 0
