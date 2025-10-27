@@ -42,11 +42,26 @@ validate_changed_files() {
   fi
 }
 
-declare -A TEAM_MAP=(
-  ["kevlar"]="kevlar"
-  ["marvel"]="autos"
-  ["vortex"]="vortex-admin vortex-dev"
-)
+get_teams_for_project() {
+  local project_name="$1"
+  local teams=()
+
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" =~ ^# ]] && continue
+
+    if [[ "$line" == "projects/${project_name}/"* ]]; then
+      team_slug=$(echo "$line" | grep -oE "@[^ ]+" | sed 's/@enigma-ruqaish\///')
+      teams+=("$team_slug")
+    fi
+  done < "$TEAM_CONFIG"
+
+  if [[ ${#teams[@]} -eq 0 ]]; then
+    github_comment ":warning: No team mapping found for project '${project_name}' in ${TEAM_CONFIG}."
+    exit 1
+  fi
+
+  echo "${teams[@]}"
+}
 
 user_in_team() {
   local ORG="$1"
@@ -61,13 +76,10 @@ check_team_membership() {
   local project_name
   project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
-  if [[ -z "${TEAM_MAP[$project_name]:-}" ]]; then
-    github_comment ":warning: No team mapping found for '${project_name}'."
-    exit 1
-  fi
-
   local ORG="enigma-ruqaish"
-  local TEAMS=(${TEAM_MAP[$project_name]})
+  local TEAMS
+  TEAMS=($(get_teams_for_project "$project_name"))
+
   for TEAM in "${TEAMS[@]}"; do
     if user_in_team "$ORG" "$TEAM"; then
       log "User ${PR_AUTHOR} is part of ${TEAM}."
@@ -97,14 +109,14 @@ auto_approve_pr() {
   response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
     -H "Accept: application/vnd.github+json" \
     -H "Authorization: Bearer ${BOT_TOKEN}" \
-    -d '{"event":"APPROVE","body":"✅ Auto-approved by enigma-bot for authorized tag update."}' \
+    -d '{"event":"APPROVE","body":"Auto-approved by enigma-bot for authorized tag update."}' \
     "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews")
 
   if [[ "$response" == "200" || "$response" == "201" ]]; then
-    log "✅ PR auto-approved successfully via enigma-bot."
+    log "PR auto-approved successfully via enigma-bot."
   else
-    log "⚠️ Auto-approval failed (HTTP $response). Posting fallback comment."
-    github_comment "✅ Tag validated and ready. Manual approval required (GitHub Actions token cannot approve)."
+    log "Auto-approval failed (HTTP $response). Posting fallback comment."
+    github_comment "Tag validated and ready. Manual approval required (GitHub Actions token cannot approve)."
   fi
 }
 
@@ -136,7 +148,7 @@ main() {
     log "No image tag change detected."
   fi
 
-  github_comment "👀 This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
+  github_comment "This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
 }
 
 main "$@"
