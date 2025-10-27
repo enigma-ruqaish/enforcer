@@ -112,12 +112,28 @@ auto_approve_pr() {
     -d '{"event":"APPROVE","body":"Auto-approved by enigma-bot for authorized tag update."}' \
     "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews")
 
-  if [[ "$response" == "200" || "$response" == "201" ]]; then
+
+if [[ "$response" == "200" || "$response" == "201" ]]; then
     log "PR auto-approved successfully via enigma-bot."
-  else
-    log "Auto-approval failed (HTTP $response). Posting fallback comment."
-    github_comment "Tag validated and ready. Manual approval required (GitHub Actions token cannot approve)."
-  fi
+
+    # === AUTO MERGE STEP ===
+    log "Attempting to auto-merge PR #${PR_NUMBER}..."
+    merge_response=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: Bearer ${BOT_TOKEN}" \
+      -d '{"merge_method":"squash"}' \
+      "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/merge")
+
+   if [[ "$merge_response" == "200" || "$merge_response" == "201" ]]; then
+     log "PR #${PR_NUMBER} merged successfully after auto-approval."
+   else
+     log "Auto-merge failed (HTTP $merge_response). Please merge manually."
+     github_comment "Auto-approval succeeded, but auto-merge failed (HTTP $merge_response). Please merge manually."
+   fi
+else
+  log "Auto-approval failed (HTTP $response). Posting fallback comment."
+  github_comment "Tag validated and ready. Manual approval required (GitHub Actions token cannot approve)."
+fi
 }
 
 main() {
