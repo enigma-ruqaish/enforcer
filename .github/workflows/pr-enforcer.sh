@@ -116,7 +116,7 @@ main() {
   TEAM_FOUND=$(check_team_membership || true)
   if [[ "$TEAM_FOUND" == *"-dev"* ]]; then
     log "User ${PR_AUTHOR} is part of a dev team (${TEAM_FOUND}). Auto-approval disabled."
-    github_comment ":no_entry: Auto-approval blocked for **dev team** member (${TEAM_FOUND}). Manual approval from **@enigma-ruqaish/enigma-devops** required."
+    github_comment "👀 This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
     exit 0
   fi
 
@@ -136,7 +136,7 @@ main() {
     log "No image tag change detected."
   fi
 
-  github_comment ":eyes: This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
+  github_comment "👀 This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
 }
 
 main "$@"
