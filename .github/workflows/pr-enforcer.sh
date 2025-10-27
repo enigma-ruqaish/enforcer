@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Allowed file types for modification
 ALLOWED_FILES_REGEX="(deployment\.yaml|hpa\.yaml|ingress\.yaml|kustomization\.yaml)$"
 
 GITHUB_JSON="github.json"
@@ -72,6 +71,7 @@ check_team_membership() {
   for TEAM in "${TEAMS[@]}"; do
     if user_in_team "$ORG" "$TEAM"; then
       log "User ${PR_AUTHOR} is part of ${TEAM}."
+      echo "$TEAM"
       return 0
     fi
   done
@@ -112,7 +112,13 @@ main() {
   log "Fetching branches..."
   fetch_branches
   validate_changed_files
-  check_team_membership
+
+  TEAM_FOUND=$(check_team_membership || true)
+  if [[ "$TEAM_FOUND" == *"-dev"* ]]; then
+    log "User ${PR_AUTHOR} is part of a dev team (${TEAM_FOUND}). Auto-approval disabled."
+    github_comment ":no_entry: Auto-approval blocked for **dev team** member (${TEAM_FOUND}). Manual approval from **@enigma-ruqaish/enigma-devops** required."
+    exit 0
+  fi
 
   if detect_image_tag_change; then
     log "Detected image tag update..."
