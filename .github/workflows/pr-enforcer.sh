@@ -9,6 +9,7 @@ DIFF_BRANCHES="origin/$(jq -r '.base_ref' $GITHUB_JSON)..origin/$(jq -r '.head_r
 REPO="$(jq -r '.event.repository.full_name' $GITHUB_JSON)"
 PR_NUMBER="$(jq -r '.event.pull_request.number' $GITHUB_JSON)"
 PR_AUTHOR="$(jq -r '.event.pull_request.user.login' $GITHUB_JSON)"
+TEAM_CONFIG="codeowners-teams.conf"
 
 log() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 warn() { echo -e "\033[1;33m[WARN]\033[0m $*"; }
@@ -139,7 +140,7 @@ main() {
     project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
     local full_teams
-    full_teams=$(grep -E "^projects/${project_name}/\*\*" CODEOWNERS | awk '{for (i=2;i<=NF;i++) print $i}' || true)
+    full_teams=$(grep -E "^projects/${project_name}/\*\*" "$TEAM_CONFIG" | awk '{for (i=2;i<=NF;i++) print $i}' || true)
 
     log "Detected CODEOWNERS entry for ${project_name}: ${full_teams}"
 
