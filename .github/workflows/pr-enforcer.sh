@@ -113,7 +113,7 @@ get_new_tag_value() {
 auto_approve_pr() {
   curl -s -X POST \
     -H "Accept: application/vnd.github+json" \
-    -H "Authorization: Bearer ${ORG_TOKEN}" \
+    -H "Authorization: Bearer ${BOT_TOKEN}" \
     -d '{"event":"APPROVE"}' \
     "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews" > /dev/null
 

@@ -24,6 +24,7 @@ jobs:
       - name: Verify, Enforce & Auto Approve
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ORG_TOKEN: ${{ secrets.ORG_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           ORG_NAME: "enigma-ruqaish"
