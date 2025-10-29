@@ -34,7 +34,7 @@ jobs:
 
           # Save GitHub event for jq access
           cat << OBJECT > github.json
-          ${{ toJson(github) }}
+          ${{ toJson(github.event) }}
           OBJECT
 
           .github/workflows/pr-enforcer.sh
