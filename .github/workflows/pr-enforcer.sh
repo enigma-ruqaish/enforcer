@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Allowed YAML files that can be modified in PRs
+# Allowed files pattern
 ALLOWED_FILES_REGEX="(deployment\.yaml|hpa\.yaml|ingress\.yaml|kustomization\.yaml)$"
 
-# GitHub and PR metadata
+# GitHub event data
 GITHUB_JSON="github.json"
 DIFF_BRANCHES="origin/$(jq -r '.base_ref' $GITHUB_JSON)..origin/$(jq -r '.head_ref' $GITHUB_JSON)"
 REPO="$(jq -r '.event.repository.full_name' $GITHUB_JSON)"
@@ -12,7 +12,6 @@ PR_NUMBER="$(jq -r '.event.pull_request.number' $GITHUB_JSON)"
 PR_AUTHOR="$(jq -r '.event.pull_request.user.login' $GITHUB_JSON)"
 TEAM_CONFIG="codeowners-teams.conf"
 
-# Utility functions
 log() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 
 github_comment() {
@@ -113,7 +112,7 @@ auto_approve_pr() {
   response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
     -H "Accept: application/vnd.github+json" \
     -H "Authorization: Bearer ${BOT_TOKEN}" \
-    -d '{"event":"APPROVE","body":"Auto-approved by enigma-bot for authorized tag update."}' \
+    -d '{"event":"APPROVE","body":"Auto-approved by enigma-bot for authorized 7-char tag update."}' \
     "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews")
 
   if [[ "$response" == "200" || "$response" == "201" ]]; then
@@ -131,39 +130,37 @@ main() {
 
   TEAM_FOUND=$(check_team_membership || true)
 
-  # 🧱 Rule ③ — Unauthorized user (TEAM_FOUND empty)
+  # CASE 3: Unauthorized
   if [[ -z "$TEAM_FOUND" ]]; then
-    log "Unauthorized user ${PR_AUTHOR} — exiting with failure."
+    github_comment ":x: CI failed. User **${PR_AUTHOR}** not in any authorized team (dev/admin)."
     exit 1
   fi
 
-  # 🔍 Check if there is an image tag change
-  if detect_image_tag_change; then
-    log "Detected image tag update..."
-    NEW_TAG=$(get_new_tag_value)
-    TAG_LENGTH=${#NEW_TAG}
-
-    # 🧠 Rule ① — Auto-approve if team lead and tag valid
-    if [[ "$TEAM_FOUND" == *"-lead"* && $TAG_LENGTH -eq 7 ]]; then
-      log "User ${PR_AUTHOR} is a team lead and tag is valid (${NEW_TAG}). Auto-approving."
-      github_comment "✅ **Rule ① Applied:** Tag update detected by team lead **${PR_AUTHOR}** (${TEAM_FOUND}).  
-Auto-approved by enigma-bot for authorized tag update."
-      auto_approve_pr
-      exit 0
-    else
-      # Tag change but not lead
-      log "Tag change detected but user is not lead or tag invalid — manual review required."
-      github_comment "⚠️ **Rule ② Applied:** Tag update by **${PR_AUTHOR}** (${TEAM_FOUND}).  
-Manual review required from **@enigma-ruqaish/enigma-devops**."
-      exit 0
+  # CASE 1: Admin + tag change + 7-char
+  if [[ "$TEAM_FOUND" == *"-admin" ]]; then
+    if detect_image_tag_change; then
+      NEW_TAG=$(get_new_tag_value)
+      if [[ ${#NEW_TAG} -eq 7 ]]; then
+        log "Admin user with 7-char tag detected. Auto-approving..."
+        auto_approve_pr
+        github_comment ":white_check_mark: Auto-approved by **@enigma-ruqaish/auto-approve**.  
+Only **vortex-admin** or **enigma-devops** can merge this PR."
+        exit 0
+      fi
     fi
+    github_comment ":white_check_mark: Changes valid. No auto-approval. Only **enigma-devops** can merge."
+    exit 0
   fi
 
-  # ✅ Rule ② — Valid team member, no tag change
-  log "Valid PR from ${PR_AUTHOR} in team ${TEAM_FOUND}, no tag change."
-  github_comment "✅ **Rule ② Applied:** PR by **${PR_AUTHOR}** from *${TEAM_FOUND}* team.  
-No image tag change detected — PR ready for manual review by **@enigma-ruqaish/enigma-devops**."
-  exit 0
+  # CASE 2: Dev user
+  if [[ "$TEAM_FOUND" == *"-dev" ]]; then
+    github_comment ":white_check_mark: CI passed. Manual review required.  
+Only **enigma-devops** can merge this PR."
+    exit 0
+  fi
+
+  github_comment ":x: Unexpected condition hit. Please check the CI logic."
+  exit 1
 }
 
 main "$@"
