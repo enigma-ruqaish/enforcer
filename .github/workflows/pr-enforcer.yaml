@@ -28,7 +28,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ORG_TOKEN: ${{ secrets.ORG_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
-          ORG_NAME: "enigma-ruqaish"
+          ORG_NAME: ${{ github.repository_owner }}
         run: |
           chmod +x .github/workflows/pr-enforcer.sh
 

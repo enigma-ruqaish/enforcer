@@ -16,8 +16,8 @@ github_comment() {
     "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" > /dev/null
 }
 
-BASE_BRANCH="$(jq -r '.base_ref' $GITHUB_JSON)"
-HEAD_BRANCH="$(jq -r '.head_ref' $GITHUB_JSON)"
+BASE_BRANCH="$(jq -r '.pull_request.base.ref' $GITHUB_JSON)"
+HEAD_BRANCH="$(jq -r '.pull_request.head.ref' $GITHUB_JSON)"
 REPO="$(jq -r '.repository.full_name' $GITHUB_JSON)"
 ORG="$(jq -r '.repository.owner.login' $GITHUB_JSON)"
 PR_NUMBER="$(jq -r '.pull_request.number' $GITHUB_JSON)"
