@@ -16,7 +16,7 @@ generatorOptions:
 
 configMapGenerator:
 - envs:
-  - config.env
+  - config.
   name: lensnexample
 
 patches:
