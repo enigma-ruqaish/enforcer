@@ -7,8 +7,7 @@ resources:
 images:
 - name: example-2
   newName: 89051.dkr.ecr.eu-west-1.amazonaws.com/lenexample
-  newTag: "128e699
-  "
+  newTag: "128e690"
 
 generatorOptions:
   annotations:
