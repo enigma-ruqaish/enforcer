@@ -18,7 +18,7 @@ generatorOptions:
 configMapGenerator:
 - envs:
   - config.env
-  name: lensnexample
+  name: lensnexam
 
 patches:
 - path: patches/deployment.yaml
