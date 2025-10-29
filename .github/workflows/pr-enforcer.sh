@@ -11,7 +11,6 @@ PR_AUTHOR="$(jq -r '.event.pull_request.user.login' $GITHUB_JSON)"
 TEAM_CONFIG="codeowners-teams.conf"
 
 log() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
-
 github_comment() {
   local message="$1"
   curl -s -X POST \
@@ -103,40 +102,6 @@ get_new_tag_value() {
   [[ -n "$kfile" ]] && yq '.images[0].newTag' "$kfile"
 }
 
-# ---------------- NEW FUNCTION ----------------
-enable_auto_merge() {
-  local pr_number=$1
-  local pr_id
-
-  # Get the PR GraphQL node_id (required by GraphQL API)
-  pr_id=$(curl -s -H "Authorization: Bearer ${BOT_TOKEN}" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/${REPO}/pulls/${pr_number}" | jq -r '.node_id')
-
-  if [[ -z "$pr_id" || "$pr_id" == "null" ]]; then
-    log "❌ Failed to fetch PR node_id for auto-merge."
-    github_comment "Auto-approval succeeded, but could not enable auto-merge (missing node_id)."
-    return
-  fi
-
-  # Enable auto-merge (squash) via GraphQL mutation
-  local response
-  response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    -H "Authorization: bearer ${BOT_TOKEN}" \
-    -H "Content-Type: application/json" \
-    -d "{\"query\":\"mutation { enablePullRequestAutoMerge(input:{pullRequestId:\\\"${pr_id}\\\", mergeMethod:SQUASH}) { clientMutationId }}\"}" \
-    https://api.github.com/graphql)
-
-  if [[ "$response" == "200" ]]; then
-    log "✅ Auto-merge successfully enabled for PR #${pr_number}."
-    github_comment "✅ Auto-merge enabled (squash). GitHub will merge once all checks pass."
-  else
-    log "⚠️ Auto-merge enablement failed (HTTP $response)."
-    github_comment "Auto-approval succeeded, but auto-merge could not be enabled (HTTP $response). Please merge manually."
-  fi
-}
-
-# ---------------- UPDATED AUTO-APPROVE ----------------
 auto_approve_pr() {
   log "Attempting PR auto-approval via enigma-bot..."
 
@@ -148,11 +113,9 @@ auto_approve_pr() {
     "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/reviews")
 
   if [[ "$response" == "200" || "$response" == "201" ]]; then
-    log "✅ PR auto-approved successfully via enigma-bot."
-    log "Attempting to enable GitHub native auto-merge for PR #${PR_NUMBER}..."
-    enable_auto_merge "${PR_NUMBER}"
+    log "PR auto-approved successfully via enigma-bot."
   else
-    log "Auto-approval failed (HTTP $response)."
+    log "Auto-approval failed (HTTP $response). Posting fallback comment."
     github_comment "Tag validated and ready. Manual approval required (GitHub Actions token cannot approve)."
   fi
 }
@@ -165,7 +128,7 @@ main() {
   TEAM_FOUND=$(check_team_membership || true)
   if [[ "$TEAM_FOUND" == *"-dev"* ]]; then
     log "User ${PR_AUTHOR} is part of a dev team (${TEAM_FOUND}). Auto-approval disabled."
-    github_comment "👀 This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
+    github_comment ":eyes: This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
     exit 0
   fi
 
