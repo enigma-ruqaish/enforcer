@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Allowed YAML files that can be modified in PRs
 ALLOWED_FILES_REGEX="(deployment\.yaml|hpa\.yaml|ingress\.yaml|kustomization\.yaml)$"
 
+# GitHub and PR metadata
 GITHUB_JSON="github.json"
 DIFF_BRANCHES="origin/$(jq -r '.base_ref' $GITHUB_JSON)..origin/$(jq -r '.head_ref' $GITHUB_JSON)"
 REPO="$(jq -r '.event.repository.full_name' $GITHUB_JSON)"
@@ -10,7 +12,9 @@ PR_NUMBER="$(jq -r '.event.pull_request.number' $GITHUB_JSON)"
 PR_AUTHOR="$(jq -r '.event.pull_request.user.login' $GITHUB_JSON)"
 TEAM_CONFIG="codeowners-teams.conf"
 
+# Utility functions
 log() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
+
 github_comment() {
   local message="$1"
   curl -s -X POST \
@@ -126,29 +130,40 @@ main() {
   validate_changed_files
 
   TEAM_FOUND=$(check_team_membership || true)
-  if [[ "$TEAM_FOUND" == *"-dev"* ]]; then
-    log "User ${PR_AUTHOR} is part of a dev team (${TEAM_FOUND}). Auto-approval disabled."
-    github_comment ":eyes: This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
-    exit 0
+
+  # 🧱 Rule ③ — Unauthorized user (TEAM_FOUND empty)
+  if [[ -z "$TEAM_FOUND" ]]; then
+    log "Unauthorized user ${PR_AUTHOR} — exiting with failure."
+    exit 1
   fi
 
+  # 🔍 Check if there is an image tag change
   if detect_image_tag_change; then
     log "Detected image tag update..."
     NEW_TAG=$(get_new_tag_value)
     TAG_LENGTH=${#NEW_TAG}
 
-    if [[ $TAG_LENGTH -eq 7 ]]; then
-      log "Detected 7-character tag ($NEW_TAG). Auto-approval conditions met."
+    # 🧠 Rule ① — Auto-approve if team lead and tag valid
+    if [[ "$TEAM_FOUND" == *"-lead"* && $TAG_LENGTH -eq 7 ]]; then
+      log "User ${PR_AUTHOR} is a team lead and tag is valid (${NEW_TAG}). Auto-approving."
+      github_comment "✅ **Rule ① Applied:** Tag update detected by team lead **${PR_AUTHOR}** (${TEAM_FOUND}).  
+Auto-approved by enigma-bot for authorized tag update."
       auto_approve_pr
       exit 0
     else
-      log "Tag ($NEW_TAG) not 7 characters. Skipping auto-approval."
+      # Tag change but not lead
+      log "Tag change detected but user is not lead or tag invalid — manual review required."
+      github_comment "⚠️ **Rule ② Applied:** Tag update by **${PR_AUTHOR}** (${TEAM_FOUND}).  
+Manual review required from **@enigma-ruqaish/enigma-devops**."
+      exit 0
     fi
-  else
-    log "No image tag change detected."
   fi
 
-  github_comment "This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
+  # ✅ Rule ② — Valid team member, no tag change
+  log "Valid PR from ${PR_AUTHOR} in team ${TEAM_FOUND}, no tag change."
+  github_comment "✅ **Rule ② Applied:** PR by **${PR_AUTHOR}** from *${TEAM_FOUND}* team.  
+No image tag change detected — PR ready for manual review by **@enigma-ruqaish/enigma-devops**."
+  exit 0
 }
 
 main "$@"
