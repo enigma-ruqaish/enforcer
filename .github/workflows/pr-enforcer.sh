@@ -2,15 +2,11 @@
 set -euo pipefail
 
 ALLOWED_FILES_REGEX="(deployment\.yaml|hpa\.yaml|ingress\.yaml|kustomization\.yaml)$"
-
 GITHUB_JSON="github.json"
-DIFF_BRANCHES="origin/$(jq -r '.base_ref' $GITHUB_JSON)..origin/$(jq -r '.head_ref' $GITHUB_JSON)"
-REPO="$(jq -r '.event.repository.full_name' $GITHUB_JSON)"
-PR_NUMBER="$(jq -r '.event.pull_request.number' $GITHUB_JSON)"
-PR_AUTHOR="$(jq -r '.event.pull_request.user.login' $GITHUB_JSON)"
 TEAM_CONFIG="codeowners-teams.conf"
 
 log() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
+
 github_comment() {
   local message="$1"
   curl -s -X POST \
@@ -20,8 +16,16 @@ github_comment() {
     "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" > /dev/null
 }
 
+BASE_BRANCH="$(jq -r '.base_ref' $GITHUB_JSON)"
+HEAD_BRANCH="$(jq -r '.head_ref' $GITHUB_JSON)"
+REPO="$(jq -r '.repository.full_name' $GITHUB_JSON)"
+ORG="$(jq -r '.repository.owner.login' $GITHUB_JSON)"
+PR_NUMBER="$(jq -r '.pull_request.number' $GITHUB_JSON)"
+PR_AUTHOR="$(jq -r '.pull_request.user.login' $GITHUB_JSON)"
+DIFF_BRANCHES="origin/${BASE_BRANCH}..origin/${HEAD_BRANCH}"
+
 fetch_branches() {
-  git fetch origin "$(jq -r '.base_ref' $GITHUB_JSON)" "$(jq -r '.head_ref' $GITHUB_JSON)"
+  git fetch origin "$BASE_BRANCH" "$HEAD_BRANCH"
 }
 
 get_changed_files() {
@@ -50,7 +54,6 @@ get_teams_for_project() {
     [[ -z "$line" || "$line" =~ ^# ]] && continue
 
     if [[ "$line" == "projects/${project_name}/"* ]]; then
-      ORG=$(jq -r '.repository.owner.login' $GITHUB_JSON)
       team_slug=$(echo "$line" | grep -oE "@[^ ]+" | sed "s/@${ORG}\///")
       teams+=("$team_slug")
     fi
@@ -77,8 +80,6 @@ check_team_membership() {
   local project_name
   project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
-  local ORG
-  ORG=$(jq -r '.repository.owner.login' $GITHUB_JSON)
   local TEAMS
   TEAMS=($(get_teams_for_project "$project_name"))
 
