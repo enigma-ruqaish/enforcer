@@ -50,7 +50,8 @@ get_teams_for_project() {
     [[ -z "$line" || "$line" =~ ^# ]] && continue
 
     if [[ "$line" == "projects/${project_name}/"* ]]; then
-      team_slug=$(echo "$line" | grep -oE "@[^ ]+" | sed 's/@enigma-ruqaish\///')
+      ORG=$(jq -r '.repository.owner.login' $GITHUB_JSON)
+      team_slug=$(echo "$line" | grep -oE "@[^ ]+" | sed "s/@${ORG}\///")
       teams+=("$team_slug")
     fi
   done < "$TEAM_CONFIG"
@@ -76,7 +77,8 @@ check_team_membership() {
   local project_name
   project_name=$(get_changed_files | head -1 | awk -F/ '{print $2}')
 
-  local ORG="enigma-ruqaish"
+  local ORG
+  ORG=$(jq -r '.repository.owner.login' $GITHUB_JSON)
   local TEAMS
   TEAMS=($(get_teams_for_project "$project_name"))
 
@@ -128,7 +130,7 @@ main() {
   TEAM_FOUND=$(check_team_membership || true)
   if [[ "$TEAM_FOUND" == *"-dev"* ]]; then
     log "User ${PR_AUTHOR} is part of a dev team (${TEAM_FOUND}). Auto-approval disabled."
-    github_comment ":eyes: This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
+    github_comment "This PR requires manual review from **@${ORG}/enigma-devops**."
     exit 0
   fi
 
@@ -148,7 +150,7 @@ main() {
     log "No image tag change detected."
   fi
 
-  github_comment "This PR requires manual review from **@enigma-ruqaish/enigma-devops**."
+  github_comment ":eyes: This PR requires manual review from **@${ORG}/enigma-devops**."
 }
 
 main "$@"
